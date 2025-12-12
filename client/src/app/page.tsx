@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Send, Plus, Sparkles, Brain, Menu, X, LogOut, 
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
-  Loader2
+  Loader2, RefreshCw, Copy, CheckCheck
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,7 +13,6 @@ import {
   conversationsApi, 
   chatApi, 
   Conversation, 
-  Message,
   ApiClientError,
 } from '@/lib/api';
 
@@ -39,13 +38,21 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Edit/delete state
+  // Edit/delete conversation state
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   
+  // Edit message state
+  const [editingMessageId, setEditingMessageId] = useState<number | string | null>(null);
+  const [editMessageContent, setEditMessageContent] = useState('');
+  
+  // Copy state
+  const [copiedMessageId, setCopiedMessageId] = useState<number | string | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -66,7 +73,15 @@ export default function Home() {
     if (currentConversationId && mobileMenuOpen) {
       setMobileMenuOpen(false);
     }
-  }, [currentConversationId]);
+  }, [currentConversationId, mobileMenuOpen]);
+
+  // Auto-resize edit textarea
+  useEffect(() => {
+    if (editTextareaRef.current) {
+      editTextareaRef.current.style.height = 'auto';
+      editTextareaRef.current.style.height = `${editTextareaRef.current.scrollHeight}px`;
+    }
+  }, [editMessageContent]);
 
   const fetchConversations = async () => {
     try {
@@ -132,14 +147,13 @@ export default function Home() {
     setMobileMenuOpen(false);
   };
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+  const sendMessageWithContent = async (content: string, conversationId: number | null, existingMessages: LocalMessage[]) => {
     setError(null);
 
     const userMessage: LocalMessage = {
       id: `temp-${Date.now()}`,
       role: 'user',
-      content: input.trim(),
+      content: content.trim(),
       memory_context: null,
     };
 
@@ -151,15 +165,13 @@ export default function Home() {
       isStreaming: true,
     };
 
-    setMessages(prev => [...prev, userMessage, assistantMessage]);
-    setInput('');
+    setMessages([...existingMessages, userMessage, assistantMessage]);
     setIsLoading(true);
 
     try {
-      let newConversationId = currentConversationId;
+      let newConversationId = conversationId;
       
-      // Use streaming endpoint
-      for await (const event of chatApi.sendStream(userMessage.content, currentConversationId || undefined)) {
+      for await (const event of chatApi.sendStream(content.trim(), conversationId || undefined)) {
         if (event.type === 'chunk') {
           setMessages(prev => {
             const updated = [...prev];
@@ -187,8 +199,7 @@ export default function Home() {
         }
       }
 
-      // Update conversation in list
-      if (newConversationId && newConversationId !== currentConversationId) {
+      if (newConversationId && newConversationId !== conversationId) {
         setCurrentConversationId(newConversationId);
         fetchConversations();
       }
@@ -207,7 +218,6 @@ export default function Home() {
       
       setError(errorMessage);
       
-      // Update the streaming message with error
       setMessages(prev => {
         const updated = [...prev];
         const lastMsg = updated[updated.length - 1];
@@ -222,10 +232,80 @@ export default function Home() {
     }
   };
 
+  const sendMessage = async () => {
+    if (!input.trim() || isLoading) return;
+    const content = input;
+    setInput('');
+    await sendMessageWithContent(content, currentConversationId, messages);
+  };
+
+  const handleEditMessage = (message: LocalMessage) => {
+    setEditingMessageId(message.id);
+    setEditMessageContent(message.content);
+  };
+
+  const cancelEditMessage = () => {
+    setEditingMessageId(null);
+    setEditMessageContent('');
+  };
+
+  const submitEditMessage = async (messageId: number | string) => {
+    if (!editMessageContent.trim() || isLoading) return;
+    
+    // Find the message index
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+    
+    // Keep messages up to and including the edited message (remove following messages)
+    const messagesBeforeEdit = messages.slice(0, messageIndex);
+    
+    setEditingMessageId(null);
+    
+    // Send the edited message and get new response
+    await sendMessageWithContent(editMessageContent, currentConversationId, messagesBeforeEdit);
+    setEditMessageContent('');
+  };
+
+  const regenerateResponse = async (messageIndex: number) => {
+    if (isLoading) return;
+    
+    // Find the user message before this assistant message
+    const userMessageIndex = messageIndex - 1;
+    if (userMessageIndex < 0 || messages[userMessageIndex].role !== 'user') return;
+    
+    const userMessage = messages[userMessageIndex];
+    
+    // Keep messages up to and including the user message
+    const messagesBeforeRegenerate = messages.slice(0, userMessageIndex);
+    
+    // Re-send the user message
+    await sendMessageWithContent(userMessage.content, currentConversationId, messagesBeforeRegenerate);
+  };
+
+  const copyMessage = async (content: string, messageId: number | string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch {
+      setError('Failed to copy to clipboard');
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+    }
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent, messageId: number | string) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submitEditMessage(messageId);
+    }
+    if (e.key === 'Escape') {
+      cancelEditMessage();
     }
   };
 
@@ -239,7 +319,7 @@ export default function Home() {
       );
       setEditingId(null);
       setEditTitle('');
-    } catch (e) {
+    } catch {
       setError('Failed to rename conversation');
     }
   };
@@ -253,7 +333,7 @@ export default function Home() {
         setMessages([]);
       }
       setMenuOpenId(null);
-    } catch (e) {
+    } catch {
       setError('Failed to delete conversation');
     }
   };
@@ -492,14 +572,57 @@ export default function Home() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6">
-              {messages.map(message => (
+              {messages.map((message, index) => (
                 <div
                   key={message.id}
-                  className={`mb-6 animate-fade-in ${message.role === 'user' ? 'flex justify-end' : ''}`}
+                  className={`group mb-6 animate-fade-in ${message.role === 'user' ? 'flex justify-end' : ''}`}
                 >
                   {message.role === 'user' ? (
-                    <div className="max-w-[85%] px-4 py-3 rounded-2xl bg-chat-accent/20 border border-chat-accent/30">
-                      {message.content}
+                    <div className="max-w-[85%]">
+                      {editingMessageId === message.id ? (
+                        <div className="space-y-2">
+                          <textarea
+                            ref={editTextareaRef}
+                            value={editMessageContent}
+                            onChange={(e) => setEditMessageContent(e.target.value)}
+                            onKeyDown={(e) => handleEditKeyDown(e, message.id)}
+                            className="w-full px-4 py-3 rounded-2xl bg-chat-input border border-chat-accent/50 focus:outline-none focus:ring-1 focus:ring-chat-accent resize-none"
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={cancelEditMessage}
+                              className="px-3 py-1.5 text-sm rounded-lg hover:bg-chat-hover transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => submitEditMessage(message.id)}
+                              disabled={!editMessageContent.trim() || isLoading}
+                              className="px-3 py-1.5 text-sm rounded-lg bg-chat-accent hover:bg-chat-accent-hover disabled:opacity-50 transition-colors"
+                            >
+                              {isLoading ? 'Sending...' : 'Send'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <div className="px-4 py-3 rounded-2xl bg-chat-accent/20 border border-chat-accent/30">
+                            {message.content}
+                          </div>
+                          {/* Edit button for user messages */}
+                          <div className="absolute -bottom-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                            <button
+                              onClick={() => handleEditMessage(message)}
+                              disabled={isLoading}
+                              className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                              title="Edit message"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="flex gap-4">
@@ -523,6 +646,30 @@ export default function Home() {
                             <span className="typing-cursor" />
                           )}
                         </div>
+                        {/* Action buttons for assistant messages */}
+                        {!message.isStreaming && message.content && (
+                          <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                            <button
+                              onClick={() => copyMessage(message.content, message.id)}
+                              className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors"
+                              title="Copy message"
+                            >
+                              {copiedMessageId === message.id ? (
+                                <CheckCheck size={14} className="text-green-400" />
+                              ) : (
+                                <Copy size={14} />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => regenerateResponse(index)}
+                              disabled={isLoading}
+                              className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                              title="Regenerate response"
+                            >
+                              <RefreshCw size={14} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
