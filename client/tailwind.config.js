@@ -5,6 +5,7 @@ module.exports = {
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {
@@ -12,13 +13,14 @@ module.exports = {
         mono: ['var(--font-mono)', 'monospace'],
       },
       colors: {
-        'chat-bg': '#0a0a0b',
-        'chat-sidebar': '#111113',
-        'chat-input': '#1a1a1d',
-        'chat-hover': '#1f1f23',
-        'chat-border': '#2a2a2d',
-        'chat-accent': '#8b5cf6',
-        'chat-accent-hover': '#7c3aed',
+        'chat-bg': 'var(--background)',
+        'chat-sidebar': 'var(--sidebar)',
+        'chat-input': 'var(--input)',
+        'chat-hover': 'var(--hover)',
+        'chat-border': 'var(--border)',
+        'chat-accent': 'var(--accent)',
+        'chat-accent-hover': 'var(--accent-hover)',
+        'chat-muted': 'var(--muted)',
       },
     },
   },

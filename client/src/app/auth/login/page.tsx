@@ -44,7 +44,7 @@ export default function LoginPage() {
             <Brain size={32} className="text-white" />
           </div>
           <h1 className="text-2xl font-bold">Welcome back</h1>
-          <p className="text-gray-400 mt-2">Sign in to continue to MemoryLLM</p>
+          <p className="text-chat-muted mt-2">Sign in to continue to MemoryLLM</p>
         </div>
 
         {/* Error Alert */}
@@ -58,7 +58,7 @@ export default function LoginPage() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="username" className="block text-sm font-medium mb-2">
               Username or Email
             </label>
             <input
@@ -73,7 +73,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="password" className="block text-sm font-medium mb-2">
               Password
             </label>
             <div className="relative">
@@ -113,7 +113,7 @@ export default function LoginPage() {
         </form>
 
         {/* Sign up link */}
-        <p className="text-center text-gray-400 mt-6">
+        <p className="text-center text-chat-muted mt-6">
           Don't have an account?{' '}
           <Link href="/auth/signup" className="text-chat-accent hover:underline">
             Sign up

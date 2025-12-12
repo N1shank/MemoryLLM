@@ -2,9 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* Dark theme (default) */
+:root,
+.dark {
   --background: #0a0a0b;
   --foreground: #fafafa;
+  --sidebar: #111113;
+  --input: #1a1a1d;
+  --hover: #1f1f23;
+  --border: #2a2a2d;
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --muted: #71717a;
+}
+
+/* Light theme */
+.light {
+  --background: #ffffff;
+  --foreground: #0a0a0b;
+  --sidebar: #f4f4f5;
+  --input: #f4f4f5;
+  --hover: #e4e4e7;
+  --border: #e4e4e7;
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --muted: #71717a;
 }
 
 * {
@@ -19,6 +41,7 @@ body {
   overflow-x: hidden;
   background: var(--background);
   color: var(--foreground);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Custom scrollbar */
@@ -32,12 +55,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333;
+  background: var(--border);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #444;
+  background: var(--muted);
 }
 
 /* Markdown styles */
@@ -84,22 +107,22 @@ body {
 /* Code blocks are handled by CodeBlock component with syntax highlighting */
 
 .markdown-content blockquote {
-  border-left: 3px solid #8b5cf6;
+  border-left: 3px solid var(--accent);
   padding-left: 1rem;
   margin-left: 0;
   margin-bottom: 0.75rem;
-  color: #a0a0a0;
+  color: var(--muted);
   font-style: italic;
 }
 
 .markdown-content a {
-  color: #8b5cf6;
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .markdown-content a:hover {
-  color: #a78bfa;
+  opacity: 0.8;
 }
 
 /* Typing animation */
@@ -111,7 +134,7 @@ body {
 .typing-cursor::after {
   content: '▊';
   animation: blink 1s infinite;
-  color: #8b5cf6;
+  color: var(--accent);
 }
 
 /* Smooth text appear */
@@ -127,6 +150,10 @@ body {
 /* Glow effect for accent */
 .glow-accent {
   box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+}
+
+.light .glow-accent {
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.2);
 }
 
 /* Memory badge animation */

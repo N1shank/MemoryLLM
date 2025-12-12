@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, CheckCheck } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface CodeBlockProps {
   language?: string;
@@ -12,6 +13,7 @@ interface CodeBlockProps {
 
 export function CodeBlock({ language, children }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
+  const { theme } = useTheme();
 
   const handleCopy = async () => {
     try {
@@ -25,22 +27,32 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
 
   // Clean the code string
   const code = children.replace(/\n$/, '');
+  
+  const isDark = theme === 'dark';
+  const bgColor = isDark ? '#1e1e1e' : '#f6f8fa';
+  const headerBg = isDark ? '#1e1e1e' : '#f0f0f0';
+  const borderColor = isDark ? '#333' : '#ddd';
+  const textColor = isDark ? '#9ca3af' : '#6b7280';
 
   return (
     <div className="relative group my-3">
       {/* Language badge and copy button */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-2 bg-[#1e1e1e] rounded-t-lg border-b border-[#333]">
-        <span className="text-xs text-gray-400 font-mono">
+      <div 
+        className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-2 rounded-t-lg border-b"
+        style={{ background: headerBg, borderColor }}
+      >
+        <span className="text-xs font-mono" style={{ color: textColor }}>
           {language || 'code'}
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+          className="flex items-center gap-1.5 text-xs transition-colors"
+          style={{ color: textColor }}
         >
           {copied ? (
             <>
-              <CheckCheck size={14} className="text-green-400" />
-              <span className="text-green-400">Copied!</span>
+              <CheckCheck size={14} className="text-green-500" />
+              <span className="text-green-500">Copied!</span>
             </>
           ) : (
             <>
@@ -54,19 +66,19 @@ export function CodeBlock({ language, children }: CodeBlockProps) {
       {/* Code block */}
       <SyntaxHighlighter
         language={language || 'text'}
-        style={oneDark}
+        style={isDark ? oneDark : oneLight}
         customStyle={{
           margin: 0,
           padding: '3rem 1rem 1rem 1rem',
           borderRadius: '0.5rem',
           fontSize: '0.875rem',
-          background: '#1e1e1e',
+          background: bgColor,
         }}
         showLineNumbers={code.split('\n').length > 3}
         lineNumberStyle={{
           minWidth: '2.5em',
           paddingRight: '1em',
-          color: '#555',
+          color: isDark ? '#555' : '#aaa',
           userSelect: 'none',
         }}
       >
@@ -87,4 +99,3 @@ export function InlineCode({ children }: InlineCodeProps) {
     </code>
   );
 }
-

@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation';
 import { 
   Send, Plus, Sparkles, Brain, Menu, X, LogOut, 
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
-  Loader2, RefreshCw, Copy, CheckCheck
+  Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { CodeBlock, InlineCode } from '@/components/CodeBlock';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { 
   conversationsApi, 
   chatApi, 
@@ -28,6 +29,7 @@ interface LocalMessage {
 export default function Home() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
@@ -525,6 +527,19 @@ export default function Home() {
             </div>
             <span className="font-semibold">MemoryLLM</span>
           </div>
+          
+          {/* Theme toggle */}
+          <button
+            onClick={toggleTheme}
+            className="ml-auto p-2 hover:bg-chat-hover rounded-lg transition-colors"
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? (
+              <Sun size={20} className="text-yellow-400" />
+            ) : (
+              <Moon size={20} className="text-chat-accent" />
+            )}
+          </button>
         </header>
 
         {/* Error banner */}

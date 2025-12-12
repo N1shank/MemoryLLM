@@ -73,7 +73,7 @@ export default function SignupPage() {
             <Brain size={32} className="text-white" />
           </div>
           <h1 className="text-2xl font-bold">Create your account</h1>
-          <p className="text-gray-400 mt-2">Start using MemoryLLM today</p>
+          <p className="text-chat-muted mt-2">Start using MemoryLLM today</p>
         </div>
 
         {/* Error Alert */}
@@ -87,7 +87,7 @@ export default function SignupPage() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="name" className="block text-sm font-medium mb-2">
               Full Name
             </label>
             <input
@@ -102,7 +102,7 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="email" className="block text-sm font-medium mb-2">
               Email
             </label>
             <input
@@ -117,7 +117,7 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="username" className="block text-sm font-medium mb-2">
               Username
             </label>
             <input
@@ -133,7 +133,7 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="password" className="block text-sm font-medium mb-2">
               Password
             </label>
             <div className="relative">
@@ -181,7 +181,7 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium mb-2">
               Confirm Password
             </label>
             <input
@@ -212,7 +212,7 @@ export default function SignupPage() {
         </form>
 
         {/* Sign in link */}
-        <p className="text-center text-gray-400 mt-6">
+        <p className="text-center text-chat-muted mt-6">
           Already have an account?{' '}
           <Link href="/auth/login" className="text-chat-accent hover:underline">
             Sign in
