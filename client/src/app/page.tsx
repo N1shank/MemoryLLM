@@ -64,6 +64,58 @@ export default function Home() {
     }
   }, [authLoading, isAuthenticated, router]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyboard = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + K: New chat
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        createNewConversation();
+        textareaRef.current?.focus();
+      }
+      
+      // Cmd/Ctrl + B: Toggle sidebar
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        if (window.innerWidth < 1024) {
+          setMobileMenuOpen(prev => !prev);
+        } else {
+          setSidebarOpen(prev => !prev);
+        }
+      }
+      
+      // Cmd/Ctrl + Shift + E: Export as Markdown
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'e') {
+        e.preventDefault();
+        if (messages.length > 0) {
+          exportConversation('markdown');
+        }
+      }
+      
+      // Escape: Close modals/editing
+      if (e.key === 'Escape') {
+        if (editingMessageId) {
+          cancelEditMessage();
+        }
+        if (menuOpenId) {
+          setMenuOpenId(null);
+        }
+        if (mobileMenuOpen) {
+          setMobileMenuOpen(false);
+        }
+      }
+      
+      // /: Focus input (when not already focused)
+      if (e.key === '/' && document.activeElement?.tagName !== 'TEXTAREA' && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        textareaRef.current?.focus();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyboard);
+    return () => window.removeEventListener('keydown', handleKeyboard);
+  }, [messages.length, editingMessageId, menuOpenId, mobileMenuOpen]);
+
   // Fetch conversations on mount
   useEffect(() => {
     if (isAuthenticated) {
@@ -835,8 +887,9 @@ export default function Home() {
                 )}
               </button>
             </div>
-            <p className="text-center text-xs text-gray-500 mt-3">
-              MemoryLLM uses Notion as persistent memory. Your data stays in your Notion workspace.
+            <p className="text-center text-xs text-chat-muted mt-3">
+              MemoryLLM uses Notion as persistent memory. 
+              <span className="hidden sm:inline"> Press <kbd className="px-1 py-0.5 mx-0.5 rounded bg-chat-hover text-[10px]">⌘K</kbd> for new chat, <kbd className="px-1 py-0.5 mx-0.5 rounded bg-chat-hover text-[10px]">/</kbd> to focus.</span>
             </p>
           </div>
         </div>
