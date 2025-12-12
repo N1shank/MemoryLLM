@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { 
   Send, Plus, Sparkles, Brain, Menu, X, LogOut, 
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
-  Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon
+  Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { CodeBlock, InlineCode } from '@/components/CodeBlock';
@@ -295,6 +295,72 @@ export default function Home() {
     }
   };
 
+  const exportConversation = (format: 'json' | 'markdown') => {
+    if (messages.length === 0) return;
+    
+    const conversation = conversations.find(c => c.id === currentConversationId);
+    const title = conversation?.title || 'conversation';
+    const timestamp = new Date().toISOString().split('T')[0];
+    
+    let content: string;
+    let filename: string;
+    let mimeType: string;
+    
+    if (format === 'json') {
+      content = JSON.stringify({
+        title,
+        exported_at: new Date().toISOString(),
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+          memory_context: m.memory_context,
+        })),
+      }, null, 2);
+      filename = `${title.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.json`;
+      mimeType = 'application/json';
+    } else {
+      const lines = [
+        `# ${title}`,
+        ``,
+        `*Exported on ${new Date().toLocaleDateString()}*`,
+        ``,
+        `---`,
+        ``,
+      ];
+      
+      for (const msg of messages) {
+        if (msg.role === 'user') {
+          lines.push(`## You`);
+        } else {
+          lines.push(`## Assistant`);
+          if (msg.memory_context) {
+            lines.push(`> 🧠 ${msg.memory_context}`);
+            lines.push(``);
+          }
+        }
+        lines.push(msg.content);
+        lines.push(``);
+        lines.push(`---`);
+        lines.push(``);
+      }
+      
+      content = lines.join('\n');
+      filename = `${title.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.md`;
+      mimeType = 'text/markdown';
+    }
+    
+    // Create and download file
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -528,18 +594,46 @@ export default function Home() {
             <span className="font-semibold">MemoryLLM</span>
           </div>
           
-          {/* Theme toggle */}
-          <button
-            onClick={toggleTheme}
-            className="ml-auto p-2 hover:bg-chat-hover rounded-lg transition-colors"
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          >
-            {theme === 'dark' ? (
-              <Sun size={20} className="text-yellow-400" />
-            ) : (
-              <Moon size={20} className="text-chat-accent" />
+          <div className="ml-auto flex items-center gap-1">
+            {/* Export dropdown */}
+            {messages.length > 0 && (
+              <div className="relative group/export">
+                <button
+                  className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+                  title="Export conversation"
+                >
+                  <Download size={20} className="text-chat-muted" />
+                </button>
+                <div className="absolute right-0 top-full mt-1 bg-chat-sidebar border border-chat-border rounded-lg shadow-xl py-1 min-w-[140px] opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all z-10">
+                  <button
+                    onClick={() => exportConversation('markdown')}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
+                  >
+                    📝 Markdown
+                  </button>
+                  <button
+                    onClick={() => exportConversation('json')}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
+                  >
+                    📦 JSON
+                  </button>
+                </div>
+              </div>
             )}
-          </button>
+            
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              {theme === 'dark' ? (
+                <Sun size={20} className="text-yellow-400" />
+              ) : (
+                <Moon size={20} className="text-chat-accent" />
+              )}
+            </button>
+          </div>
         </header>
 
         {/* Error banner */}
