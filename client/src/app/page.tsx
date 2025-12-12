@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { 
   Send, Plus, Sparkles, Brain, Menu, X, LogOut, 
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
-  Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download
+  Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { CodeBlock, InlineCode } from '@/components/CodeBlock';
@@ -52,6 +52,18 @@ export default function Home() {
   
   // Copy state
   const [copiedMessageId, setCopiedMessageId] = useState<number | string | null>(null);
+  
+  // Search state
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{
+    conversationId: number;
+    conversationTitle: string;
+    messageContent: string;
+    messageRole: 'user' | 'assistant';
+  }>>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -109,6 +121,13 @@ export default function Home() {
       if (e.key === '/' && document.activeElement?.tagName !== 'TEXTAREA' && document.activeElement?.tagName !== 'INPUT') {
         e.preventDefault();
         textareaRef.current?.focus();
+      }
+      
+      // Cmd/Ctrl + F: Open search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault();
+        setSearchOpen(true);
+        setTimeout(() => searchInputRef.current?.focus(), 100);
       }
     };
     
@@ -464,6 +483,61 @@ export default function Home() {
     router.push('/auth/login');
   };
 
+  // Search across all conversations
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      const results: typeof searchResults = [];
+      const query = searchQuery.toLowerCase();
+      
+      // Search through all conversations
+      for (const conv of conversations) {
+        try {
+          const fullConv = await conversationsApi.get(conv.id);
+          for (const msg of fullConv.messages) {
+            if (msg.content.toLowerCase().includes(query)) {
+              results.push({
+                conversationId: conv.id,
+                conversationTitle: conv.title,
+                messageContent: msg.content,
+                messageRole: msg.role,
+              });
+            }
+          }
+        } catch {
+          // Skip conversations that fail to load
+        }
+      }
+      
+      setSearchResults(results.slice(0, 20)); // Limit to 20 results
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+    if (e.key === 'Escape') {
+      setSearchOpen(false);
+      setSearchQuery('');
+      setSearchResults([]);
+    }
+  };
+
+  const goToSearchResult = async (conversationId: number) => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    await loadConversation(conversationId);
+  };
+
   // Loading state
   if (authLoading) {
     return (
@@ -479,6 +553,80 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-chat-bg">
+      {/* Search modal */}
+      {searchOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-start justify-center pt-[15vh]">
+          <div 
+            className="w-full max-w-2xl mx-4 bg-chat-sidebar rounded-xl border border-chat-border shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Search input */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-chat-border">
+              <Search size={20} className="text-chat-muted shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search all conversations..."
+                className="flex-1 bg-transparent focus:outline-none text-lg"
+                autoFocus
+              />
+              {isSearching && <Loader2 size={20} className="animate-spin text-chat-muted" />}
+              <button
+                onClick={() => {
+                  setSearchOpen(false);
+                  setSearchQuery('');
+                  setSearchResults([]);
+                }}
+                className="p-1 hover:bg-chat-hover rounded"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            {/* Search results */}
+            <div className="max-h-[50vh] overflow-y-auto">
+              {searchResults.length === 0 && searchQuery && !isSearching ? (
+                <div className="px-4 py-8 text-center text-chat-muted">
+                  No results found for "{searchQuery}"
+                </div>
+              ) : (
+                searchResults.map((result, index) => (
+                  <button
+                    key={index}
+                    onClick={() => goToSearchResult(result.conversationId)}
+                    className="w-full text-left px-4 py-3 hover:bg-chat-hover border-b border-chat-border last:border-0 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs px-2 py-0.5 rounded bg-chat-accent/20 text-chat-accent">
+                        {result.messageRole === 'user' ? 'You' : 'AI'}
+                      </span>
+                      <span className="text-sm text-chat-muted truncate">
+                        {result.conversationTitle}
+                      </span>
+                    </div>
+                    <p className="text-sm line-clamp-2">
+                      {result.messageContent.length > 150 
+                        ? result.messageContent.slice(0, 150) + '...' 
+                        : result.messageContent}
+                    </p>
+                  </button>
+                ))
+              )}
+              
+              {!searchQuery && (
+                <div className="px-4 py-6 text-center text-chat-muted text-sm">
+                  <p>Type to search across all your conversations</p>
+                  <p className="mt-2 text-xs">Press <kbd className="px-1.5 py-0.5 mx-0.5 rounded bg-chat-hover">Enter</kbd> to search, <kbd className="px-1.5 py-0.5 mx-0.5 rounded bg-chat-hover">Esc</kbd> to close</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile overlay */}
       {mobileMenuOpen && (
         <div 
@@ -497,13 +645,25 @@ export default function Home() {
           ${sidebarOpen ? 'lg:w-72' : 'lg:w-0 lg:overflow-hidden'}
         `}
       >
-        <div className="p-3 border-b border-chat-border">
+        <div className="p-3 border-b border-chat-border space-y-2">
           <button
             onClick={createNewConversation}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-chat-border hover:bg-chat-hover transition-all duration-200 group"
           >
             <Plus size={18} className="group-hover:rotate-90 transition-transform duration-200" />
             <span className="font-medium">New chat</span>
+          </button>
+          
+          <button
+            onClick={() => {
+              setSearchOpen(true);
+              setTimeout(() => searchInputRef.current?.focus(), 100);
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-chat-hover transition-colors text-chat-muted text-sm"
+          >
+            <Search size={16} />
+            <span>Search</span>
+            <kbd className="ml-auto text-xs px-1.5 py-0.5 rounded bg-chat-hover">⌘F</kbd>
           </button>
         </div>
 
