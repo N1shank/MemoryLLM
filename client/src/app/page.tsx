@@ -8,6 +8,7 @@ import {
   Loader2, RefreshCw, Copy, CheckCheck
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { CodeBlock, InlineCode } from '@/components/CodeBlock';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   conversationsApi, 
@@ -640,7 +641,26 @@ export default function Home() {
                           {message.isStreaming && !message.content ? (
                             <span className="typing-cursor text-gray-400">Thinking</span>
                           ) : (
-                            <ReactMarkdown>{message.content}</ReactMarkdown>
+                            <ReactMarkdown
+                              components={{
+                                code({ className, children, ...props }) {
+                                  const match = /language-(\w+)/.exec(className || '');
+                                  const isInline = !match && !className;
+                                  
+                                  if (isInline) {
+                                    return <InlineCode>{children}</InlineCode>;
+                                  }
+                                  
+                                  return (
+                                    <CodeBlock language={match?.[1]}>
+                                      {String(children).replace(/\n$/, '')}
+                                    </CodeBlock>
+                                  );
+                                },
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
                           )}
                           {message.isStreaming && message.content && (
                             <span className="typing-cursor" />

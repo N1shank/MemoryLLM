@@ -80,29 +80,8 @@ body {
   margin-bottom: 0.25rem;
 }
 
-.markdown-content code {
-  background: rgba(139, 92, 246, 0.15);
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 0.875em;
-  color: #c4b5fd;
-}
-
-.markdown-content pre {
-  background: #1a1a1d;
-  padding: 1rem;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin-bottom: 0.75rem;
-  border: 1px solid #2a2a2d;
-}
-
-.markdown-content pre code {
-  background: transparent;
-  padding: 0;
-  color: #e5e5e5;
-}
+/* Inline code is handled by InlineCode component */
+/* Code blocks are handled by CodeBlock component with syntax highlighting */
 
 .markdown-content blockquote {
   border-left: 3px solid #8b5cf6;
