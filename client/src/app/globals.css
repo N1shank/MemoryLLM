@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --background: #0d0d0d;
-  --foreground: #ececec;
+  --background: #0a0a0b;
+  --foreground: #fafafa;
 }
 
 * {
@@ -23,7 +23,8 @@ body {
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -31,20 +32,20 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3f3f3f;
-  border-radius: 4px;
+  background: #333;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: #444;
 }
 
 /* Markdown styles */
 .markdown-content h1,
 .markdown-content h2,
 .markdown-content h3 {
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
   font-weight: 600;
 }
 
@@ -61,47 +62,65 @@ body {
 }
 
 .markdown-content p {
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   line-height: 1.7;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
 }
 
 .markdown-content ul,
 .markdown-content ol {
-  margin-bottom: 1rem;
-  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+  padding-left: 1.25rem;
 }
 
 .markdown-content li {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .markdown-content code {
-  background: #2f2f2f;
-  padding: 0.2rem 0.4rem;
+  background: rgba(139, 92, 246, 0.15);
+  padding: 0.15rem 0.4rem;
   border-radius: 4px;
-  font-family: var(--font-geist-mono);
-  font-size: 0.9em;
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  color: #c4b5fd;
 }
 
 .markdown-content pre {
-  background: #1a1a1a;
+  background: #1a1a1d;
   padding: 1rem;
   border-radius: 8px;
   overflow-x: auto;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid #2a2a2d;
 }
 
 .markdown-content pre code {
   background: transparent;
   padding: 0;
+  color: #e5e5e5;
 }
 
 .markdown-content blockquote {
-  border-left: 3px solid #10a37f;
+  border-left: 3px solid #8b5cf6;
   padding-left: 1rem;
   margin-left: 0;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   color: #a0a0a0;
+  font-style: italic;
+}
+
+.markdown-content a {
+  color: #8b5cf6;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-content a:hover {
+  color: #a78bfa;
 }
 
 /* Typing animation */
@@ -113,6 +132,30 @@ body {
 .typing-cursor::after {
   content: '▊';
   animation: blink 1s infinite;
-  color: #10a37f;
+  color: #8b5cf6;
 }
 
+/* Smooth text appear */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Glow effect for accent */
+.glow-accent {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+}
+
+/* Memory badge animation */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}

@@ -2,12 +2,11 @@
 
 import json
 import logging
-from typing import Any
+from typing import AsyncGenerator
 
 import google.generativeai as genai
 
 from app.core.config import settings
-from app.schemas.chat import ChatMessage
 from app.services.notion_mcp import notion_client
 
 logger = logging.getLogger(__name__)
@@ -41,7 +40,7 @@ class GeminiAgent:
     async def chat(
         self,
         message: str,
-        conversation_history: list[ChatMessage],
+        conversation_history: list[dict],
     ) -> tuple[str, str | None]:
         """
         Process a chat message with memory capabilities.
@@ -49,35 +48,128 @@ class GeminiAgent:
         Returns:
             tuple of (response_text, memory_context)
         """
+        memory_actions: list[str] = []
+
+        try:
+            async with notion_client.connect() as client:
+                # Get Notion tools for function calling
+                notion_tools = client.get_tools_for_gemini()
+                
+                # Build conversation for Gemini
+                gemini_history = []
+                for msg in conversation_history:
+                    gemini_history.append({
+                        "role": "user" if msg["role"] == "user" else "model",
+                        "parts": [msg["content"]],
+                    })
+
+                # Create chat with tools
+                tools = None
+                if notion_tools:
+                    tools = self._convert_to_gemini_tools(notion_tools)
+
+                chat = self.model.start_chat(history=gemini_history)
+                
+                # Send message with system prompt context
+                full_message = f"{SYSTEM_PROMPT}\n\nUser: {message}"
+                
+                response, actions = await self._generate_with_tools(
+                    chat, full_message, tools, client
+                )
+                memory_actions = actions
+                
+                # Build memory context string
+                memory_context = None
+                if memory_actions:
+                    memory_context = " | ".join(memory_actions)
+                
+                return response, memory_context
+        
+        except Exception as e:
+            logger.error(f"Error in chat: {e}")
+            # Try without Notion tools as fallback
+            try:
+                gemini_history = []
+                for msg in conversation_history:
+                    gemini_history.append({
+                        "role": "user" if msg["role"] == "user" else "model",
+                        "parts": [msg["content"]],
+                    })
+                
+                chat = self.model.start_chat(history=gemini_history)
+                response = chat.send_message(
+                    f"{SYSTEM_PROMPT}\n\n(Note: Notion memory is currently unavailable)\n\nUser: {message}",
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.7,
+                        max_output_tokens=2048,
+                    ),
+                )
+                
+                if response.candidates and response.candidates[0].content.parts:
+                    return response.candidates[0].content.parts[0].text, "Notion unavailable"
+                return "I apologize, but I couldn't generate a response.", None
+            except Exception as fallback_error:
+                logger.error(f"Fallback also failed: {fallback_error}")
+                raise
+
+    async def chat_stream(
+        self,
+        message: str,
+        conversation_history: list[dict],
+    ) -> AsyncGenerator[tuple[str, str | None], None]:
+        """
+        Process a chat message with streaming response.
+        
+        Yields:
+            tuple of (chunk_text, memory_context) for each token
+        """
+        memory_actions: list[str] = []
         memory_context = None
 
-        async with notion_client.connect() as client:
-            # Get Notion tools for function calling
-            notion_tools = client.get_tools_for_gemini()
-            
-            # Build conversation for Gemini
-            gemini_history = []
-            for msg in conversation_history:
-                gemini_history.append({
-                    "role": "user" if msg.role == "user" else "model",
-                    "parts": [msg.content],
-                })
+        try:
+            async with notion_client.connect() as client:
+                # Get Notion tools
+                notion_tools = client.get_tools_for_gemini()
+                
+                # Build conversation history
+                gemini_history = []
+                for msg in conversation_history:
+                    gemini_history.append({
+                        "role": "user" if msg["role"] == "user" else "model",
+                        "parts": [msg["content"]],
+                    })
 
-            # Create chat with tools
-            tools = None
-            if notion_tools:
-                tools = self._convert_to_gemini_tools(notion_tools)
+                tools = None
+                if notion_tools:
+                    tools = self._convert_to_gemini_tools(notion_tools)
 
-            chat = self.model.start_chat(history=gemini_history)
-            
-            # Send message with system prompt context
-            full_message = f"{SYSTEM_PROMPT}\n\nUser: {message}"
-            
-            response = await self._generate_with_tools(
-                chat, full_message, tools, client
-            )
-            
-            return response, memory_context
+                chat = self.model.start_chat(history=gemini_history)
+                full_message = f"{SYSTEM_PROMPT}\n\nUser: {message}"
+                
+                # First, handle any tool calls (non-streaming)
+                response, actions = await self._generate_with_tools(
+                    chat, full_message, tools, client
+                )
+                memory_actions = actions
+                
+                if memory_actions:
+                    memory_context = " | ".join(memory_actions)
+                
+                # Stream the final response
+                # Since Gemini's streaming with tools is complex,
+                # we simulate streaming by chunking the response
+                words = response.split()
+                chunk_size = 3  # Send 3 words at a time
+                
+                for i in range(0, len(words), chunk_size):
+                    chunk = " ".join(words[i:i + chunk_size])
+                    if i > 0:
+                        chunk = " " + chunk
+                    yield chunk, memory_context if i == 0 else None
+        
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            yield f"Error: {str(e)}", None
 
     def _convert_to_gemini_tools(self, mcp_tools: list[dict]) -> list:
         """Convert MCP tools to Gemini tool format."""
@@ -101,7 +193,6 @@ class GeminiAgent:
 
     def _clean_schema(self, schema: dict) -> dict:
         """Clean JSON schema for Gemini compatibility."""
-        # Gemini expects a specific format
         cleaned = {}
         
         if "type" in schema:
@@ -125,7 +216,6 @@ class GeminiAgent:
         
         prop_type = prop.get("type", "string")
         if isinstance(prop_type, list):
-            # Handle union types - take first non-null
             prop_type = next((t for t in prop_type if t != "null"), "string")
         
         cleaned["type"] = prop_type.upper()
@@ -151,8 +241,14 @@ class GeminiAgent:
         tools: list | None,
         mcp_client,
         max_iterations: int = 10,
-    ) -> str:
-        """Generate response, handling tool calls iteratively."""
+    ) -> tuple[str, list[str]]:
+        """
+        Generate response, handling tool calls iteratively.
+        
+        Returns:
+            tuple of (response_text, list of memory actions)
+        """
+        memory_actions: list[str] = []
         
         generation_config = genai.GenerationConfig(
             temperature=0.7,
@@ -174,33 +270,46 @@ class GeminiAgent:
                     generation_config=generation_config,
                 )
             
-            # Check if there are function calls
             if not response.candidates:
-                return "I apologize, but I couldn't generate a response."
+                return "I apologize, but I couldn't generate a response.", memory_actions
             
             candidate = response.candidates[0]
             
-            # Check for function calls in the response
+            # Check for function calls
             function_calls = []
             for part in candidate.content.parts:
                 if hasattr(part, "function_call") and part.function_call:
                     function_calls.append(part.function_call)
             
             if not function_calls:
-                # No function calls, return the text response
-                return candidate.content.parts[0].text if candidate.content.parts else ""
+                # No function calls, return text response
+                text = ""
+                for part in candidate.content.parts:
+                    if hasattr(part, "text") and part.text:
+                        text += part.text
+                return text, memory_actions
             
             # Execute function calls
             function_responses = []
             for fc in function_calls:
                 try:
-                    # Convert protobuf to dict
                     args = dict(fc.args) if fc.args else {}
                     result = await mcp_client.call_tool(fc.name, args)
                     function_responses.append({
                         "name": fc.name,
                         "response": {"result": result},
                     })
+                    
+                    # Track memory action
+                    action_desc = f"📝 {fc.name}"
+                    if "search" in fc.name.lower():
+                        action_desc = f"🔍 Searched Notion"
+                    elif "create" in fc.name.lower():
+                        action_desc = f"✏️ Created in Notion"
+                    elif "update" in fc.name.lower():
+                        action_desc = f"📝 Updated Notion"
+                    memory_actions.append(action_desc)
+                    
                     logger.info(f"Called tool {fc.name} with args {args}")
                 except Exception as e:
                     logger.error(f"Tool call failed: {e}")
@@ -208,6 +317,7 @@ class GeminiAgent:
                         "name": fc.name,
                         "response": {"error": str(e)},
                     })
+                    memory_actions.append(f"❌ {fc.name} failed")
             
             # Send function responses back
             current_message = genai.protos.Content(
@@ -222,9 +332,8 @@ class GeminiAgent:
                 ]
             )
         
-        return "I apologize, but I reached the maximum number of tool calls."
+        return "I apologize, but I reached the maximum number of tool calls.", memory_actions
 
 
 # Singleton instance
 gemini_agent = GeminiAgent()
-

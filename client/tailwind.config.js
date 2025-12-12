@@ -8,19 +8,19 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-geist)', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-geist-mono)', 'monospace'],
+        sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'monospace'],
       },
       colors: {
-        'chat-bg': '#0d0d0d',
-        'chat-sidebar': '#171717',
-        'chat-input': '#2f2f2f',
-        'chat-hover': '#212121',
-        'chat-border': '#3f3f3f',
-        'chat-accent': '#10a37f',
+        'chat-bg': '#0a0a0b',
+        'chat-sidebar': '#111113',
+        'chat-input': '#1a1a1d',
+        'chat-hover': '#1f1f23',
+        'chat-border': '#2a2a2d',
+        'chat-accent': '#8b5cf6',
+        'chat-accent-hover': '#7c3aed',
       },
     },
   },
   plugins: [],
 };
-

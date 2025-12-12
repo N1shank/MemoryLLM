@@ -1,3 +1,5 @@
+"""Application configuration."""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +18,14 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
+    # Database (SQLite by default - file-based, no setup needed)
+    DATABASE_URL: str = "sqlite+aiosqlite:///./memoryllm.db"
+
+    # JWT Authentication
+    JWT_SECRET_KEY: str = "your-super-secret-key-change-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+
     # Gemini
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.0-flash"
@@ -27,4 +37,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
