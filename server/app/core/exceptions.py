@@ -37,6 +37,16 @@ class ConflictError(HTTPException):
         super().__init__(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
 
+class TooManyRequestsError(HTTPException):
+    """429 Too Many Requests."""
+    def __init__(self, detail: str = "Too many requests", retry_after: int = 60):
+        super().__init__(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=detail,
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
 class InternalServerError(HTTPException):
     """500 Internal Server Error."""
     def __init__(self, detail: str = "An unexpected error occurred"):
@@ -53,4 +63,3 @@ class ServiceUnavailableError(HTTPException):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=detail,
         )
-

@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.routes.router import router as api_router
 from app.core.config import settings
 from app.core.database import init_db
+from app.core.rate_limit import RateLimitMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -37,6 +38,9 @@ app = FastAPI(
     debug=settings.DEBUG,
     lifespan=lifespan,
 )
+
+# Rate limiting middleware (add before CORS so it runs after CORS)
+app.add_middleware(RateLimitMiddleware)
 
 # CORS middleware
 app.add_middleware(

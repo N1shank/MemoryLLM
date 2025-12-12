@@ -15,8 +15,15 @@ from app.core.exceptions import (
     ForbiddenError,
     NotFoundError,
     ConflictError,
+    TooManyRequestsError,
     InternalServerError,
     ServiceUnavailableError,
+)
+from app.core.rate_limit import (
+    RateLimiter,
+    RateLimitMiddleware,
+    rate_limiter,
+    RATE_LIMITS,
 )
 
 __all__ = [
@@ -36,7 +43,11 @@ __all__ = [
     "ForbiddenError",
     "NotFoundError",
     "ConflictError",
+    "TooManyRequestsError",
     "InternalServerError",
     "ServiceUnavailableError",
+    "RateLimiter",
+    "RateLimitMiddleware",
+    "rate_limiter",
+    "RATE_LIMITS",
 ]
-
