@@ -11,6 +11,7 @@ import {
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import { CodeBlock, InlineCode } from '@/components/CodeBlock';
+import { TypingIndicator } from '@/components/TypingIndicator';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { 
@@ -971,7 +972,11 @@ export default function Home() {
                         )}
                         <div className="markdown-content">
                           {message.isStreaming && !message.content ? (
-                            <span className="typing-cursor text-gray-400">Thinking</span>
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
+                              <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
+                              <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
+                            </div>
                           ) : (
                             <ReactMarkdown
                               components={{
