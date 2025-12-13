@@ -14,6 +14,7 @@ import { CodeBlock, InlineCode } from '@/components/CodeBlock';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { VoiceInput } from '@/components/VoiceInput';
 import { FileAttachmentButton, AttachmentPreview, MessageAttachment } from '@/components/FileAttachment';
+import { ShareButton } from '@/components/ShareButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { 
@@ -931,6 +932,11 @@ export default function Home() {
           </div>
           
           <div className="ml-auto flex items-center gap-1">
+            {/* Share button */}
+            {currentConversationId && messages.length > 0 && (
+              <ShareButton conversationId={currentConversationId} />
+            )}
+            
             {/* Export dropdown */}
             {messages.length > 0 && (
               <div className="relative group/export">
