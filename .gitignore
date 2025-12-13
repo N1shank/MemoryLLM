@@ -5,7 +5,9 @@
 .env.test.local
 .env.production.local
 *.env
-env.example
+# Keep example files
+!env.example
+!*.example
 
 # Python
 __pycache__/
@@ -63,4 +65,13 @@ htmlcov/
 # Logs
 *.log
 logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads
+uploads/
+server/uploads/
 

@@ -35,5 +35,9 @@ class Settings(BaseSettings):
     NOTION_MCP_SERVER_PATH: str = "npx"
     NOTION_MCP_SERVER_ARGS: list[str] = ["-y", "@notionhq/notion-mcp-server"]
 
+    # File uploads
+    UPLOAD_DIR: str = "./uploads"
+    MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
+
 
 settings = Settings()

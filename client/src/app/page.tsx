@@ -13,6 +13,7 @@ import ReactMarkdown from 'react-markdown';
 import { CodeBlock, InlineCode } from '@/components/CodeBlock';
 import { TypingIndicator } from '@/components/TypingIndicator';
 import { VoiceInput } from '@/components/VoiceInput';
+import { FileAttachmentButton, AttachmentPreview, MessageAttachment } from '@/components/FileAttachment';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { 
@@ -20,7 +21,14 @@ import {
   chatApi, 
   Conversation, 
   ApiClientError,
+  UploadedFile,
 } from '@/lib/api';
+
+interface Attachment {
+  url: string;
+  filename: string;
+  isImage: boolean;
+}
 
 interface LocalMessage {
   id: number | string;
@@ -28,6 +36,7 @@ interface LocalMessage {
   content: string;
   memory_context: string | null;
   isStreaming?: boolean;
+  attachments?: Attachment[];
 }
 
 export default function Home() {
@@ -56,6 +65,9 @@ export default function Home() {
   
   // Copy state
   const [copiedMessageId, setCopiedMessageId] = useState<number | string | null>(null);
+  
+  // Attachment state
+  const [pendingAttachments, setPendingAttachments] = useState<UploadedFile[]>([]);
   
   // Search state
   const [searchOpen, setSearchOpen] = useState(false);
@@ -311,10 +323,109 @@ export default function Home() {
   };
 
   const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
-    const content = input;
+    if ((!input.trim() && pendingAttachments.length === 0) || isLoading) return;
+    
+    // Build message content with attachments
+    let content = input.trim();
+    const attachments: Attachment[] = [];
+    
+    if (pendingAttachments.length > 0) {
+      for (const file of pendingAttachments) {
+        attachments.push({
+          url: file.url,
+          filename: file.original_name,
+          isImage: file.is_image,
+        });
+        // Add file reference to message for AI context
+        content += `\n[Attached file: ${file.original_name}]`;
+      }
+    }
+    
     setInput('');
-    await sendMessageWithContent(content, currentConversationId, messages);
+    setPendingAttachments([]);
+    
+    // Send with attachments
+    const userMessage: LocalMessage = {
+      id: `temp-${Date.now()}`,
+      role: 'user',
+      content: input.trim(),
+      memory_context: null,
+      attachments: attachments.length > 0 ? attachments : undefined,
+    };
+
+    const assistantMessage: LocalMessage = {
+      id: `temp-${Date.now() + 1}`,
+      role: 'assistant',
+      content: '',
+      memory_context: null,
+      isStreaming: true,
+    };
+
+    setMessages([...messages, userMessage, assistantMessage]);
+    setIsLoading(true);
+
+    try {
+      let newConversationId = currentConversationId;
+      
+      for await (const event of chatApi.sendStream(content, currentConversationId || undefined)) {
+        if (event.type === 'chunk') {
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastMsg = updated[updated.length - 1];
+            if (lastMsg.role === 'assistant') {
+              lastMsg.content += event.content || '';
+            }
+            return updated;
+          });
+        } else if (event.type === 'done') {
+          newConversationId = event.conversation_id || null;
+          
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastMsg = updated[updated.length - 1];
+            if (lastMsg.role === 'assistant') {
+              lastMsg.id = event.message_id || lastMsg.id;
+              lastMsg.memory_context = event.memory_context || null;
+              lastMsg.isStreaming = false;
+            }
+            return updated;
+          });
+        } else if (event.type === 'error') {
+          throw new Error(event.message || 'Streaming error');
+        }
+      }
+
+      if (newConversationId && newConversationId !== currentConversationId) {
+        setCurrentConversationId(newConversationId);
+        fetchConversations();
+      }
+    } catch (e) {
+      const errorMessage = e instanceof ApiClientError 
+        ? e.message 
+        : e instanceof Error 
+          ? e.message 
+          : 'Failed to send message';
+      
+      if (e instanceof ApiClientError && e.status === 401) {
+        logout();
+        router.push('/auth/login');
+        return;
+      }
+      
+      setError(errorMessage);
+      
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+          lastMsg.content = 'Sorry, I encountered an error. Please try again.';
+          lastMsg.isStreaming = false;
+        }
+        return updated;
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEditMessage = (message: LocalMessage) => {
@@ -914,6 +1025,19 @@ export default function Home() {
                 >
                   {message.role === 'user' ? (
                     <div className="max-w-[85%]">
+                      {/* Attachments */}
+                      {message.attachments && message.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2 justify-end">
+                          {message.attachments.map((att, idx) => (
+                            <MessageAttachment
+                              key={idx}
+                              url={att.url}
+                              filename={att.filename}
+                              isImage={att.isImage}
+                            />
+                          ))}
+                        </div>
+                      )}
                       {editingMessageId === message.id ? (
                         <div className="space-y-2">
                           <textarea
@@ -1041,7 +1165,24 @@ export default function Home() {
         {/* Input area */}
         <div className="px-4 pb-6 pt-2">
           <div className="max-w-3xl mx-auto">
+            {/* Pending attachments */}
+            {pendingAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {pendingAttachments.map((file, idx) => (
+                  <AttachmentPreview
+                    key={idx}
+                    file={file}
+                    onRemove={() => setPendingAttachments(prev => prev.filter((_, i) => i !== idx))}
+                  />
+                ))}
+              </div>
+            )}
+            
             <div className="relative flex items-end bg-chat-input rounded-2xl border border-chat-border focus-within:border-chat-accent/50 focus-within:ring-1 focus-within:ring-chat-accent/20 transition-all">
+              <FileAttachmentButton
+                onFileUploaded={(file) => setPendingAttachments(prev => [...prev, file])}
+                disabled={isLoading}
+              />
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -1050,7 +1191,7 @@ export default function Home() {
                 placeholder="Message MemoryLLM..."
                 rows={1}
                 disabled={isLoading}
-                className="flex-1 bg-transparent px-4 py-4 resize-none focus:outline-none max-h-[200px] disabled:opacity-50"
+                className="flex-1 bg-transparent py-4 resize-none focus:outline-none max-h-[200px] disabled:opacity-50"
               />
               <div className="flex items-center gap-1 m-2">
                 <VoiceInput 
@@ -1059,7 +1200,7 @@ export default function Home() {
                 />
                 <button
                   onClick={sendMessage}
-                  disabled={!input.trim() || isLoading}
+                  disabled={(!input.trim() && pendingAttachments.length === 0) || isLoading}
                   className="p-2.5 rounded-xl bg-chat-accent disabled:opacity-40 disabled:cursor-not-allowed hover:bg-chat-accent-hover transition-all duration-200 hover:scale-105 active:scale-95"
                 >
                   {isLoading ? (
