@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { 
   Send, Plus, Sparkles, Brain, Menu, X, LogOut, 
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
-  Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search
+  Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
+  Settings
 } from 'lucide-react';
+import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import { CodeBlock, InlineCode } from '@/components/CodeBlock';
 import { useAuth } from '@/contexts/AuthContext';
@@ -770,15 +772,24 @@ export default function Home() {
                   {user?.name?.charAt(0).toUpperCase()}
                 </span>
               </div>
-              <span className="text-sm truncate max-w-[120px]">{user?.name}</span>
+              <span className="text-sm truncate max-w-[100px]">{user?.name}</span>
             </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
-              title="Sign out"
-            >
-              <LogOut size={18} className="text-gray-400" />
-            </button>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/settings"
+                className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+                title="Settings"
+              >
+                <Settings size={18} className="text-gray-400" />
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+                title="Sign out"
+              >
+                <LogOut size={18} className="text-gray-400" />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
