@@ -12,6 +12,7 @@ import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import { CodeBlock, InlineCode } from '@/components/CodeBlock';
 import { TypingIndicator } from '@/components/TypingIndicator';
+import { VoiceInput } from '@/components/VoiceInput';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { 
@@ -1051,17 +1052,23 @@ export default function Home() {
                 disabled={isLoading}
                 className="flex-1 bg-transparent px-4 py-4 resize-none focus:outline-none max-h-[200px] disabled:opacity-50"
               />
-              <button
-                onClick={sendMessage}
-                disabled={!input.trim() || isLoading}
-                className="p-2.5 m-2 rounded-xl bg-chat-accent disabled:opacity-40 disabled:cursor-not-allowed hover:bg-chat-accent-hover transition-all duration-200 hover:scale-105 active:scale-95"
-              >
-                {isLoading ? (
-                  <Loader2 size={18} className="text-white animate-spin" />
-                ) : (
-                  <Send size={18} className="text-white" />
-                )}
-              </button>
+              <div className="flex items-center gap-1 m-2">
+                <VoiceInput 
+                  onTranscript={(text) => setInput(prev => prev + (prev ? ' ' : '') + text)}
+                  disabled={isLoading}
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={!input.trim() || isLoading}
+                  className="p-2.5 rounded-xl bg-chat-accent disabled:opacity-40 disabled:cursor-not-allowed hover:bg-chat-accent-hover transition-all duration-200 hover:scale-105 active:scale-95"
+                >
+                  {isLoading ? (
+                    <Loader2 size={18} className="text-white animate-spin" />
+                  ) : (
+                    <Send size={18} className="text-white" />
+                  )}
+                </button>
+              </div>
             </div>
             <p className="text-center text-xs text-chat-muted mt-3">
               MemoryLLM uses Notion as persistent memory. 
