@@ -1,0 +1,1229 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { 
+  Send, Plus, Sparkles, Brain, Menu, X, LogOut, 
+  Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
+  Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
+  Settings
+} from 'lucide-react';
+import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import { CodeBlock, InlineCode } from '@/components/CodeBlock';
+import { TypingIndicator } from '@/components/TypingIndicator';
+import { VoiceInput } from '@/components/VoiceInput';
+import { FileAttachmentButton, AttachmentPreview, MessageAttachment } from '@/components/FileAttachment';
+import { ShareButton } from '@/components/ShareButton';
+import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import { 
+  conversationsApi, 
+  chatApi, 
+  Conversation, 
+  ApiClientError,
+  UploadedFile,
+} from '@/lib/api';
+
+interface Attachment {
+  url: string;
+  filename: string;
+  isImage: boolean;
+}
+
+interface LocalMessage {
+  id: number | string;
+  role: 'user' | 'assistant';
+  content: string;
+  memory_context: string | null;
+  isStreaming?: boolean;
+  attachments?: Attachment[];
+}
+
+export default function Home() {
+  const router = useRouter();
+  const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<LocalMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingConversations, setIsFetchingConversations] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Edit/delete conversation state
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
+  
+  // Edit message state
+  const [editingMessageId, setEditingMessageId] = useState<number | string | null>(null);
+  const [editMessageContent, setEditMessageContent] = useState('');
+  
+  // Copy state
+  const [copiedMessageId, setCopiedMessageId] = useState<number | string | null>(null);
+  
+  // Attachment state
+  const [pendingAttachments, setPendingAttachments] = useState<UploadedFile[]>([]);
+  
+  // Search state
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{
+    conversationId: number;
+    conversationTitle: string;
+    messageContent: string;
+    messageRole: 'user' | 'assistant';
+  }>>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/auth/login');
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyboard = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + K: New chat
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        createNewConversation();
+        textareaRef.current?.focus();
+      }
+      
+      // Cmd/Ctrl + B: Toggle sidebar
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        if (window.innerWidth < 1024) {
+          setMobileMenuOpen(prev => !prev);
+        } else {
+          setSidebarOpen(prev => !prev);
+        }
+      }
+      
+      // Cmd/Ctrl + Shift + E: Export as Markdown
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'e') {
+        e.preventDefault();
+        if (messages.length > 0) {
+          exportConversation('markdown');
+        }
+      }
+      
+      // Escape: Close modals/editing
+      if (e.key === 'Escape') {
+        if (editingMessageId) {
+          cancelEditMessage();
+        }
+        if (menuOpenId) {
+          setMenuOpenId(null);
+        }
+        if (mobileMenuOpen) {
+          setMobileMenuOpen(false);
+        }
+      }
+      
+      // /: Focus input (when not already focused)
+      if (e.key === '/' && document.activeElement?.tagName !== 'TEXTAREA' && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        textareaRef.current?.focus();
+      }
+      
+      // Cmd/Ctrl + F: Open search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault();
+        setSearchOpen(true);
+        setTimeout(() => searchInputRef.current?.focus(), 100);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyboard);
+    return () => window.removeEventListener('keydown', handleKeyboard);
+  }, [messages.length, editingMessageId, menuOpenId, mobileMenuOpen]);
+
+  // Fetch conversations on mount
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchConversations();
+    }
+  }, [isAuthenticated]);
+
+  // Close mobile menu when selecting a conversation
+  useEffect(() => {
+    if (currentConversationId && mobileMenuOpen) {
+      setMobileMenuOpen(false);
+    }
+  }, [currentConversationId, mobileMenuOpen]);
+
+  // Auto-resize edit textarea
+  useEffect(() => {
+    if (editTextareaRef.current) {
+      editTextareaRef.current.style.height = 'auto';
+      editTextareaRef.current.style.height = `${editTextareaRef.current.scrollHeight}px`;
+    }
+  }, [editMessageContent]);
+
+  const fetchConversations = async () => {
+    try {
+      const convs = await conversationsApi.list();
+      setConversations(convs);
+    } catch (e) {
+      if (e instanceof ApiClientError && e.status === 401) {
+        logout();
+        router.push('/auth/login');
+      } else {
+        setError('Failed to load conversations');
+      }
+    } finally {
+      setIsFetchingConversations(false);
+    }
+  };
+
+  const loadConversation = async (id: number) => {
+    setCurrentConversationId(id);
+    setError(null);
+    
+    try {
+      const conv = await conversationsApi.get(id);
+      setMessages(conv.messages.map(m => ({
+        ...m,
+        isStreaming: false,
+      })));
+    } catch (e) {
+      if (e instanceof ApiClientError) {
+        if (e.status === 401) {
+          logout();
+          router.push('/auth/login');
+        } else if (e.status === 404) {
+          setError('Conversation not found');
+          fetchConversations();
+        } else {
+          setError(e.message);
+        }
+      }
+    }
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  }, [input]);
+
+  const createNewConversation = () => {
+    setCurrentConversationId(null);
+    setMessages([]);
+    setInput('');
+    setError(null);
+    setMobileMenuOpen(false);
+  };
+
+  const sendMessageWithContent = async (content: string, conversationId: number | null, existingMessages: LocalMessage[]) => {
+    setError(null);
+
+    const userMessage: LocalMessage = {
+      id: `temp-${Date.now()}`,
+      role: 'user',
+      content: content.trim(),
+      memory_context: null,
+    };
+
+    const assistantMessage: LocalMessage = {
+      id: `temp-${Date.now() + 1}`,
+      role: 'assistant',
+      content: '',
+      memory_context: null,
+      isStreaming: true,
+    };
+
+    setMessages([...existingMessages, userMessage, assistantMessage]);
+    setIsLoading(true);
+
+    try {
+      let newConversationId = conversationId;
+      
+      for await (const event of chatApi.sendStream(content.trim(), conversationId || undefined)) {
+        if (event.type === 'chunk') {
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastMsg = updated[updated.length - 1];
+            if (lastMsg.role === 'assistant') {
+              lastMsg.content += event.content || '';
+            }
+            return updated;
+          });
+        } else if (event.type === 'done') {
+          newConversationId = event.conversation_id || null;
+          
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastMsg = updated[updated.length - 1];
+            if (lastMsg.role === 'assistant') {
+              lastMsg.id = event.message_id || lastMsg.id;
+              lastMsg.memory_context = event.memory_context || null;
+              lastMsg.isStreaming = false;
+            }
+            return updated;
+          });
+        } else if (event.type === 'error') {
+          throw new Error(event.message || 'Streaming error');
+        }
+      }
+
+      if (newConversationId && newConversationId !== conversationId) {
+        setCurrentConversationId(newConversationId);
+        fetchConversations();
+      }
+    } catch (e) {
+      const errorMessage = e instanceof ApiClientError 
+        ? e.message 
+        : e instanceof Error 
+          ? e.message 
+          : 'Failed to send message';
+      
+      if (e instanceof ApiClientError && e.status === 401) {
+        logout();
+        router.push('/auth/login');
+        return;
+      }
+      
+      setError(errorMessage);
+      
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+          lastMsg.content = 'Sorry, I encountered an error. Please try again.';
+          lastMsg.isStreaming = false;
+        }
+        return updated;
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const sendMessage = async () => {
+    if ((!input.trim() && pendingAttachments.length === 0) || isLoading) return;
+    
+    // Build message content with attachments
+    let content = input.trim();
+    const attachments: Attachment[] = [];
+    
+    if (pendingAttachments.length > 0) {
+      for (const file of pendingAttachments) {
+        attachments.push({
+          url: file.url,
+          filename: file.original_name,
+          isImage: file.is_image,
+        });
+        // Add file reference to message for AI context
+        content += `\n[Attached file: ${file.original_name}]`;
+      }
+    }
+    
+    setInput('');
+    setPendingAttachments([]);
+    
+    // Send with attachments
+    const userMessage: LocalMessage = {
+      id: `temp-${Date.now()}`,
+      role: 'user',
+      content: input.trim(),
+      memory_context: null,
+      attachments: attachments.length > 0 ? attachments : undefined,
+    };
+
+    const assistantMessage: LocalMessage = {
+      id: `temp-${Date.now() + 1}`,
+      role: 'assistant',
+      content: '',
+      memory_context: null,
+      isStreaming: true,
+    };
+
+    setMessages([...messages, userMessage, assistantMessage]);
+    setIsLoading(true);
+
+    try {
+      let newConversationId = currentConversationId;
+      
+      for await (const event of chatApi.sendStream(content, currentConversationId || undefined)) {
+        if (event.type === 'chunk') {
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastMsg = updated[updated.length - 1];
+            if (lastMsg.role === 'assistant') {
+              lastMsg.content += event.content || '';
+            }
+            return updated;
+          });
+        } else if (event.type === 'done') {
+          newConversationId = event.conversation_id || null;
+          
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastMsg = updated[updated.length - 1];
+            if (lastMsg.role === 'assistant') {
+              lastMsg.id = event.message_id || lastMsg.id;
+              lastMsg.memory_context = event.memory_context || null;
+              lastMsg.isStreaming = false;
+            }
+            return updated;
+          });
+        } else if (event.type === 'error') {
+          throw new Error(event.message || 'Streaming error');
+        }
+      }
+
+      if (newConversationId && newConversationId !== currentConversationId) {
+        setCurrentConversationId(newConversationId);
+        fetchConversations();
+      }
+    } catch (e) {
+      const errorMessage = e instanceof ApiClientError 
+        ? e.message 
+        : e instanceof Error 
+          ? e.message 
+          : 'Failed to send message';
+      
+      if (e instanceof ApiClientError && e.status === 401) {
+        logout();
+        router.push('/auth/login');
+        return;
+      }
+      
+      setError(errorMessage);
+      
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+          lastMsg.content = 'Sorry, I encountered an error. Please try again.';
+          lastMsg.isStreaming = false;
+        }
+        return updated;
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditMessage = (message: LocalMessage) => {
+    setEditingMessageId(message.id);
+    setEditMessageContent(message.content);
+  };
+
+  const cancelEditMessage = () => {
+    setEditingMessageId(null);
+    setEditMessageContent('');
+  };
+
+  const submitEditMessage = async (messageId: number | string) => {
+    if (!editMessageContent.trim() || isLoading) return;
+    
+    // Find the message index
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+    
+    // Keep messages up to and including the edited message (remove following messages)
+    const messagesBeforeEdit = messages.slice(0, messageIndex);
+    
+    setEditingMessageId(null);
+    
+    // Send the edited message and get new response
+    await sendMessageWithContent(editMessageContent, currentConversationId, messagesBeforeEdit);
+    setEditMessageContent('');
+  };
+
+  const regenerateResponse = async (messageIndex: number) => {
+    if (isLoading) return;
+    
+    // Find the user message before this assistant message
+    const userMessageIndex = messageIndex - 1;
+    if (userMessageIndex < 0 || messages[userMessageIndex].role !== 'user') return;
+    
+    const userMessage = messages[userMessageIndex];
+    
+    // Keep messages up to and including the user message
+    const messagesBeforeRegenerate = messages.slice(0, userMessageIndex);
+    
+    // Re-send the user message
+    await sendMessageWithContent(userMessage.content, currentConversationId, messagesBeforeRegenerate);
+  };
+
+  const copyMessage = async (content: string, messageId: number | string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch {
+      setError('Failed to copy to clipboard');
+    }
+  };
+
+  const exportConversation = (format: 'json' | 'markdown') => {
+    if (messages.length === 0) return;
+    
+    const conversation = conversations.find(c => c.id === currentConversationId);
+    const title = conversation?.title || 'conversation';
+    const timestamp = new Date().toISOString().split('T')[0];
+    
+    let content: string;
+    let filename: string;
+    let mimeType: string;
+    
+    if (format === 'json') {
+      content = JSON.stringify({
+        title,
+        exported_at: new Date().toISOString(),
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+          memory_context: m.memory_context,
+        })),
+      }, null, 2);
+      filename = `${title.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.json`;
+      mimeType = 'application/json';
+    } else {
+      const lines = [
+        `# ${title}`,
+        ``,
+        `*Exported on ${new Date().toLocaleDateString()}*`,
+        ``,
+        `---`,
+        ``,
+      ];
+      
+      for (const msg of messages) {
+        if (msg.role === 'user') {
+          lines.push(`## You`);
+        } else {
+          lines.push(`## Assistant`);
+          if (msg.memory_context) {
+            lines.push(`> 🧠 ${msg.memory_context}`);
+            lines.push(``);
+          }
+        }
+        lines.push(msg.content);
+        lines.push(``);
+        lines.push(`---`);
+        lines.push(``);
+      }
+      
+      content = lines.join('\n');
+      filename = `${title.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.md`;
+      mimeType = 'text/markdown';
+    }
+    
+    // Create and download file
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent, messageId: number | string) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submitEditMessage(messageId);
+    }
+    if (e.key === 'Escape') {
+      cancelEditMessage();
+    }
+  };
+
+  const handleRename = async (id: number) => {
+    if (!editTitle.trim()) return;
+    
+    try {
+      await conversationsApi.update(id, editTitle.trim());
+      setConversations(prev => 
+        prev.map(c => c.id === id ? { ...c, title: editTitle.trim() } : c)
+      );
+      setEditingId(null);
+      setEditTitle('');
+    } catch {
+      setError('Failed to rename conversation');
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await conversationsApi.delete(id);
+      setConversations(prev => prev.filter(c => c.id !== id));
+      if (currentConversationId === id) {
+        setCurrentConversationId(null);
+        setMessages([]);
+      }
+      setMenuOpenId(null);
+    } catch {
+      setError('Failed to delete conversation');
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    router.push('/auth/login');
+  };
+
+  // Search across all conversations
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      const results: typeof searchResults = [];
+      const query = searchQuery.toLowerCase();
+      
+      // Search through all conversations
+      for (const conv of conversations) {
+        try {
+          const fullConv = await conversationsApi.get(conv.id);
+          for (const msg of fullConv.messages) {
+            if (msg.content.toLowerCase().includes(query)) {
+              results.push({
+                conversationId: conv.id,
+                conversationTitle: conv.title,
+                messageContent: msg.content,
+                messageRole: msg.role,
+              });
+            }
+          }
+        } catch {
+          // Skip conversations that fail to load
+        }
+      }
+      
+      setSearchResults(results.slice(0, 20)); // Limit to 20 results
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+    if (e.key === 'Escape') {
+      setSearchOpen(false);
+      setSearchQuery('');
+      setSearchResults([]);
+    }
+  };
+
+  const goToSearchResult = async (conversationId: number) => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    await loadConversation(conversationId);
+  };
+
+  // Loading state
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-chat-bg">
+        <Loader2 size={32} className="animate-spin text-chat-accent" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return (
+    <div className="flex h-screen bg-chat-bg">
+      {/* Search modal */}
+      {searchOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-start justify-center pt-[15vh]">
+          <div 
+            className="w-full max-w-2xl mx-4 bg-chat-sidebar rounded-xl border border-chat-border shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Search input */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-chat-border">
+              <Search size={20} className="text-chat-muted shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search all conversations..."
+                className="flex-1 bg-transparent focus:outline-none text-lg"
+                autoFocus
+              />
+              {isSearching && <Loader2 size={20} className="animate-spin text-chat-muted" />}
+              <button
+                onClick={() => {
+                  setSearchOpen(false);
+                  setSearchQuery('');
+                  setSearchResults([]);
+                }}
+                className="p-1 hover:bg-chat-hover rounded"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            {/* Search results */}
+            <div className="max-h-[50vh] overflow-y-auto">
+              {searchResults.length === 0 && searchQuery && !isSearching ? (
+                <div className="px-4 py-8 text-center text-chat-muted">
+                  No results found for "{searchQuery}"
+                </div>
+              ) : (
+                searchResults.map((result, index) => (
+                  <button
+                    key={index}
+                    onClick={() => goToSearchResult(result.conversationId)}
+                    className="w-full text-left px-4 py-3 hover:bg-chat-hover border-b border-chat-border last:border-0 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs px-2 py-0.5 rounded bg-chat-accent/20 text-chat-accent">
+                        {result.messageRole === 'user' ? 'You' : 'AI'}
+                      </span>
+                      <span className="text-sm text-chat-muted truncate">
+                        {result.conversationTitle}
+                      </span>
+                    </div>
+                    <p className="text-sm line-clamp-2">
+                      {result.messageContent.length > 150 
+                        ? result.messageContent.slice(0, 150) + '...' 
+                        : result.messageContent}
+                    </p>
+                  </button>
+                ))
+              )}
+              
+              {!searchQuery && (
+                <div className="px-4 py-6 text-center text-chat-muted text-sm">
+                  <p>Type to search across all your conversations</p>
+                  <p className="mt-2 text-xs">Press <kbd className="px-1.5 py-0.5 mx-0.5 rounded bg-chat-hover">Enter</kbd> to search, <kbd className="px-1.5 py-0.5 mx-0.5 rounded bg-chat-hover">Esc</kbd> to close</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`
+          fixed lg:relative inset-y-0 left-0 z-50
+          w-72 bg-chat-sidebar flex flex-col
+          transform transition-transform duration-300 ease-in-out
+          ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          ${sidebarOpen ? 'lg:w-72' : 'lg:w-0 lg:overflow-hidden'}
+        `}
+      >
+        <div className="p-3 border-b border-chat-border space-y-2">
+          <button
+            onClick={createNewConversation}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-chat-border hover:bg-chat-hover transition-all duration-200 group"
+          >
+            <Plus size={18} className="group-hover:rotate-90 transition-transform duration-200" />
+            <span className="font-medium">New chat</span>
+          </button>
+          
+          <button
+            onClick={() => {
+              setSearchOpen(true);
+              setTimeout(() => searchInputRef.current?.focus(), 100);
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-chat-hover transition-colors text-chat-muted text-sm"
+          >
+            <Search size={16} />
+            <span>Search</span>
+            <kbd className="ml-auto text-xs px-1.5 py-0.5 rounded bg-chat-hover">⌘F</kbd>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-2 py-2">
+          {isFetchingConversations ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={24} className="animate-spin text-gray-500" />
+            </div>
+          ) : conversations.length === 0 ? (
+            <p className="text-center text-gray-500 text-sm py-8">No conversations yet</p>
+          ) : (
+            conversations.map(conv => (
+              <div
+                key={conv.id}
+                className={`group relative mb-1 rounded-lg transition-colors ${
+                  conv.id === currentConversationId
+                    ? 'bg-chat-hover'
+                    : 'hover:bg-chat-hover/50'
+                }`}
+              >
+                {editingId === conv.id ? (
+                  <div className="flex items-center gap-2 p-2">
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleRename(conv.id)}
+                      className="flex-1 bg-chat-input px-2 py-1 rounded text-sm focus:outline-none focus:ring-1 focus:ring-chat-accent"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleRename(conv.id)}
+                      className="p-1 hover:bg-chat-accent/20 rounded"
+                    >
+                      <Check size={16} className="text-chat-accent" />
+                    </button>
+                    <button
+                      onClick={() => { setEditingId(null); setEditTitle(''); }}
+                      className="p-1 hover:bg-red-500/20 rounded"
+                    >
+                      <X size={16} className="text-red-400" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => loadConversation(conv.id)}
+                      className="w-full text-left px-3 py-2.5 pr-10 truncate text-sm"
+                    >
+                      {conv.title}
+                    </button>
+                    
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenId(menuOpenId === conv.id ? null : conv.id);
+                        }}
+                        className="p-1.5 hover:bg-chat-border rounded"
+                      >
+                        <MoreHorizontal size={16} />
+                      </button>
+                      
+                      {menuOpenId === conv.id && (
+                        <div className="absolute right-0 top-full mt-1 bg-chat-sidebar border border-chat-border rounded-lg shadow-xl py-1 min-w-[120px] z-10">
+                          <button
+                            onClick={() => {
+                              setEditingId(conv.id);
+                              setEditTitle(conv.title);
+                              setMenuOpenId(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
+                          >
+                            <Pencil size={14} />
+                            Rename
+                          </button>
+                          <button
+                            onClick={() => handleDelete(conv.id)}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-500/10 text-red-400 text-sm"
+                          >
+                            <Trash2 size={14} />
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="p-3 border-t border-chat-border space-y-2">
+          <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400">
+            <Brain size={16} className="text-chat-accent animate-pulse-soft" />
+            <span>Notion Memory Active</span>
+          </div>
+          
+          <div className="flex items-center justify-between px-3 py-2">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-chat-accent/20 flex items-center justify-center">
+                <span className="text-sm font-medium text-chat-accent">
+                  {user?.name?.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <span className="text-sm truncate max-w-[100px]">{user?.name}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/settings"
+                className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+                title="Settings"
+              >
+                <Settings size={18} className="text-gray-400" />
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+                title="Sign out"
+              >
+                <LogOut size={18} className="text-gray-400" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="flex items-center gap-3 px-4 py-3 border-b border-chat-border bg-chat-bg/80 backdrop-blur-sm">
+          <button
+            onClick={() => {
+              if (window.innerWidth < 1024) {
+                setMobileMenuOpen(!mobileMenuOpen);
+              } else {
+                setSidebarOpen(!sidebarOpen);
+              }
+            }}
+            className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+          >
+            {mobileMenuOpen || sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-purple-600 flex items-center justify-center glow-accent">
+              <Sparkles size={16} className="text-white" />
+            </div>
+            <span className="font-semibold">MemoryLLM</span>
+          </div>
+          
+          <div className="ml-auto flex items-center gap-1">
+            {/* Share button */}
+            {currentConversationId && messages.length > 0 && (
+              <ShareButton conversationId={currentConversationId} />
+            )}
+            
+            {/* Export dropdown */}
+            {messages.length > 0 && (
+              <div className="relative group/export">
+                <button
+                  className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+                  title="Export conversation"
+                >
+                  <Download size={20} className="text-chat-muted" />
+                </button>
+                <div className="absolute right-0 top-full mt-1 bg-chat-sidebar border border-chat-border rounded-lg shadow-xl py-1 min-w-[140px] opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all z-10">
+                  <button
+                    onClick={() => exportConversation('markdown')}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
+                  >
+                    📝 Markdown
+                  </button>
+                  <button
+                    onClick={() => exportConversation('json')}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
+                  >
+                    📦 JSON
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              {theme === 'dark' ? (
+                <Sun size={20} className="text-yellow-400" />
+              ) : (
+                <Moon size={20} className="text-chat-accent" />
+              )}
+            </button>
+          </div>
+        </header>
+
+        {/* Error banner */}
+        {error && (
+          <div className="px-4 py-3 bg-red-500/10 border-b border-red-500/20 flex items-center gap-3">
+            <AlertCircle size={18} className="text-red-400 shrink-0" />
+            <p className="text-red-400 text-sm flex-1">{error}</p>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-400 hover:text-red-300"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto">
+          {messages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center px-4">
+              <div className="max-w-lg text-center">
+                <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-chat-accent to-purple-600 flex items-center justify-center glow-accent">
+                  <Sparkles size={36} className="text-white" />
+                </div>
+                <h1 className="text-3xl font-bold mb-3">MemoryLLM</h1>
+                <p className="text-gray-400 mb-8 text-lg">
+                  I'm an AI assistant with Notion as my memory. I can remember our conversations
+                  and help you manage your knowledge.
+                </p>
+                <div className="grid gap-3 text-left">
+                  {[
+                    'Remember your preferences and context',
+                    'Store important information in Notion',
+                    'Recall past conversations and notes',
+                  ].map((feature, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl bg-chat-sidebar border border-chat-border hover:border-chat-accent/30 transition-colors"
+                    >
+                      <Brain size={18} className="text-chat-accent shrink-0" />
+                      <span className="text-sm text-gray-300">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="max-w-3xl mx-auto px-4 py-6">
+              {messages.map((message, index) => (
+                <div
+                  key={message.id}
+                  className={`group mb-6 animate-fade-in ${message.role === 'user' ? 'flex justify-end' : ''}`}
+                >
+                  {message.role === 'user' ? (
+                    <div className="max-w-[85%]">
+                      {/* Attachments */}
+                      {message.attachments && message.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2 justify-end">
+                          {message.attachments.map((att, idx) => (
+                            <MessageAttachment
+                              key={idx}
+                              url={att.url}
+                              filename={att.filename}
+                              isImage={att.isImage}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {editingMessageId === message.id ? (
+                        <div className="space-y-2">
+                          <textarea
+                            ref={editTextareaRef}
+                            value={editMessageContent}
+                            onChange={(e) => setEditMessageContent(e.target.value)}
+                            onKeyDown={(e) => handleEditKeyDown(e, message.id)}
+                            className="w-full px-4 py-3 rounded-2xl bg-chat-input border border-chat-accent/50 focus:outline-none focus:ring-1 focus:ring-chat-accent resize-none"
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={cancelEditMessage}
+                              className="px-3 py-1.5 text-sm rounded-lg hover:bg-chat-hover transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => submitEditMessage(message.id)}
+                              disabled={!editMessageContent.trim() || isLoading}
+                              className="px-3 py-1.5 text-sm rounded-lg bg-chat-accent hover:bg-chat-accent-hover disabled:opacity-50 transition-colors"
+                            >
+                              {isLoading ? 'Sending...' : 'Send'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <div className="px-4 py-3 rounded-2xl bg-chat-accent/20 border border-chat-accent/30">
+                            {message.content}
+                          </div>
+                          {/* Edit button for user messages */}
+                          <div className="absolute -bottom-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                            <button
+                              onClick={() => handleEditMessage(message)}
+                              disabled={isLoading}
+                              className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                              title="Edit message"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex gap-4">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-purple-600 flex items-center justify-center shrink-0 glow-accent">
+                        <Sparkles size={14} className="text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {message.memory_context && (
+                          <div className="mb-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-chat-accent/10 border border-chat-accent/20 text-xs text-chat-accent">
+                            <Brain size={12} />
+                            {message.memory_context}
+                          </div>
+                        )}
+                        <div className="markdown-content">
+                          {message.isStreaming && !message.content ? (
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
+                              <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
+                              <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
+                            </div>
+                          ) : (
+                            <ReactMarkdown
+                              components={{
+                                code({ className, children, ...props }) {
+                                  const match = /language-(\w+)/.exec(className || '');
+                                  const isInline = !match && !className;
+                                  
+                                  if (isInline) {
+                                    return <InlineCode>{children}</InlineCode>;
+                                  }
+                                  
+                                  return (
+                                    <CodeBlock language={match?.[1]}>
+                                      {String(children).replace(/\n$/, '')}
+                                    </CodeBlock>
+                                  );
+                                },
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          )}
+                          {message.isStreaming && message.content && (
+                            <span className="typing-cursor" />
+                          )}
+                        </div>
+                        {/* Action buttons for assistant messages */}
+                        {!message.isStreaming && message.content && (
+                          <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                            <button
+                              onClick={() => copyMessage(message.content, message.id)}
+                              className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors"
+                              title="Copy message"
+                            >
+                              {copiedMessageId === message.id ? (
+                                <CheckCheck size={14} className="text-green-400" />
+                              ) : (
+                                <Copy size={14} />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => regenerateResponse(index)}
+                              disabled={isLoading}
+                              className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                              title="Regenerate response"
+                            >
+                              <RefreshCw size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Input area */}
+        <div className="px-4 pb-6 pt-2">
+          <div className="max-w-3xl mx-auto">
+            {/* Pending attachments */}
+            {pendingAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {pendingAttachments.map((file, idx) => (
+                  <AttachmentPreview
+                    key={idx}
+                    file={file}
+                    onRemove={() => setPendingAttachments(prev => prev.filter((_, i) => i !== idx))}
+                  />
+                ))}
+              </div>
+            )}
+            
+            <div className="relative flex items-end bg-chat-input rounded-2xl border border-chat-border focus-within:border-chat-accent/50 focus-within:ring-1 focus-within:ring-chat-accent/20 transition-all">
+              <FileAttachmentButton
+                onFileUploaded={(file) => setPendingAttachments(prev => [...prev, file])}
+                disabled={isLoading}
+              />
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Message MemoryLLM..."
+                rows={1}
+                disabled={isLoading}
+                className="flex-1 bg-transparent py-4 resize-none focus:outline-none max-h-[200px] disabled:opacity-50"
+              />
+              <div className="flex items-center gap-1 m-2">
+                <VoiceInput 
+                  onTranscript={(text) => setInput(prev => prev + (prev ? ' ' : '') + text)}
+                  disabled={isLoading}
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={(!input.trim() && pendingAttachments.length === 0) || isLoading}
+                  className="p-2.5 rounded-xl bg-chat-accent disabled:opacity-40 disabled:cursor-not-allowed hover:bg-chat-accent-hover transition-all duration-200 hover:scale-105 active:scale-95"
+                >
+                  {isLoading ? (
+                    <Loader2 size={18} className="text-white animate-spin" />
+                  ) : (
+                    <Send size={18} className="text-white" />
+                  )}
+                </button>
+              </div>
+            </div>
+            <p className="text-center text-xs text-chat-muted mt-3">
+              MemoryLLM uses Notion as persistent memory. 
+              <span className="hidden sm:inline"> Press <kbd className="px-1 py-0.5 mx-0.5 rounded bg-chat-hover text-[10px]">⌘K</kbd> for new chat, <kbd className="px-1 py-0.5 mx-0.5 rounded bg-chat-hover text-[10px]">/</kbd> to focus.</span>
+            </p>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
