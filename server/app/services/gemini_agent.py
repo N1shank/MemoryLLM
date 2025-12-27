@@ -1,10 +1,12 @@
 """Gemini Agent with Notion MCP memory integration."""
 
+import asyncio
 import json
 import logging
 from typing import AsyncGenerator
 
 import google.generativeai as genai
+from google.api_core import exceptions as google_exceptions
 
 from app.core.config import settings
 from app.services.notion_mcp import notion_client
@@ -108,9 +110,14 @@ class GeminiAgent:
                 if response.candidates and response.candidates[0].content.parts:
                     return response.candidates[0].content.parts[0].text, "Notion unavailable"
                 return "I apologize, but I couldn't generate a response.", None
+            except google_exceptions.ResourceExhausted as e:
+                error_msg = self._handle_rate_limit_error(e)
+                logger.error(f"Rate limit error in fallback: {e}")
+                return error_msg, None
             except Exception as fallback_error:
-                logger.error(f"Fallback also failed: {fallback_error}")
-                raise
+                logger.error(f"Fallback also failed: {fallback_error}", exc_info=True)
+                error_msg = self._handle_rate_limit_error(fallback_error) if "429" in str(fallback_error) else f"Error: {str(fallback_error)[:200]}"
+                return error_msg, None
 
     async def chat_stream(
         self,
@@ -184,13 +191,24 @@ class GeminiAgent:
             chat = self.model.start_chat(history=gemini_history)
             full_message = f"{SYSTEM_PROMPT}\n\n(Note: Notion memory is currently unavailable)\n\nUser: {message}"
             
-            response = chat.send_message(
-                full_message,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.7,
-                    max_output_tokens=2048,
-                ),
+            generation_config = genai.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=2048,
             )
+            
+            try:
+                response = await self._send_message_with_retry(
+                    chat, full_message, generation_config
+                )
+            except google_exceptions.ResourceExhausted as e:
+                error_msg = self._handle_rate_limit_error(e)
+                yield error_msg, "Notion unavailable"
+                return
+            except Exception as e:
+                logger.error(f"Error in fallback streaming: {e}", exc_info=True)
+                error_msg = self._handle_rate_limit_error(e) if "429" in str(e) else f"Error: {str(e)[:200]}"
+                yield error_msg, None
+                return
             
             if response.candidates and response.candidates[0].content.parts:
                 response_text = response.candidates[0].content.parts[0].text
@@ -273,6 +291,66 @@ class GeminiAgent:
             
         return cleaned
 
+    def _handle_rate_limit_error(self, error: Exception) -> str:
+        """Extract user-friendly message from rate limit error."""
+        error_str = str(error)
+        if "429" in error_str or "quota" in error_str.lower():
+            if "retry in" in error_str.lower():
+                # Extract retry delay if available
+                return "⚠️ Rate limit exceeded. Please wait a moment and try again. If this persists, check your Gemini API quota at https://ai.dev/usage"
+            return "⚠️ API rate limit exceeded. Please check your Gemini API quota and billing at https://ai.dev/usage"
+        return f"API Error: {error_str[:200]}"
+    
+    async def _send_message_with_retry(
+        self,
+        chat,
+        message: str,
+        generation_config: genai.GenerationConfig,
+        tools: list | None = None,
+        max_retries: int = 3,
+    ):
+        """Send message with retry logic for rate limits."""
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                # Run synchronous send_message in thread pool
+                if tools:
+                    return await asyncio.to_thread(
+                        chat.send_message,
+                        message,
+                        generation_config=generation_config,
+                        tools=tools,
+                    )
+                else:
+                    return await asyncio.to_thread(
+                        chat.send_message,
+                        message,
+                        generation_config=generation_config,
+                    )
+            except google_exceptions.ResourceExhausted as e:
+                last_error = e
+                # Check if error has retry delay
+                retry_delay = 20  # Default 20 seconds
+                error_str = str(e)
+                if "retry in" in error_str.lower():
+                    # Try to extract retry delay (usually in seconds)
+                    import re
+                    match = re.search(r'retry in ([\d.]+)s', error_str.lower())
+                    if match:
+                        retry_delay = max(20, int(float(match.group(1))) + 5)
+                
+                if attempt < max_retries - 1:
+                    logger.warning(f"Rate limit hit, retrying in {retry_delay}s (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    raise
+            except Exception as e:
+                # For other errors, raise immediately
+                raise
+        
+        raise last_error
+
     async def _generate_with_tools(
         self,
         chat,
@@ -297,17 +375,17 @@ class GeminiAgent:
         current_message = message
         
         for _ in range(max_iterations):
-            if tools:
-                response = chat.send_message(
-                    current_message,
-                    generation_config=generation_config,
-                    tools=tools,
+            try:
+                response = await self._send_message_with_retry(
+                    chat, current_message, generation_config, tools
                 )
-            else:
-                response = chat.send_message(
-                    current_message,
-                    generation_config=generation_config,
-                )
+            except google_exceptions.ResourceExhausted as e:
+                error_msg = self._handle_rate_limit_error(e)
+                logger.error(f"Rate limit error: {e}")
+                return error_msg, memory_actions
+            except Exception as e:
+                logger.error(f"Error generating response: {e}", exc_info=True)
+                return f"Error: {str(e)[:200]}", memory_actions
             
             if not response.candidates:
                 return "I apologize, but I couldn't generate a response.", memory_actions
