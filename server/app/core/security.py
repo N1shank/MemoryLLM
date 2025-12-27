@@ -1,5 +1,6 @@
 """Security utilities for JWT and password hashing."""
 
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -9,17 +10,25 @@ from passlib.context import CryptContext
 from app.core.config import settings
 
 # Password hashing
+# Pre-hash with SHA256 to avoid bcrypt's 72-byte limit
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _prehash_password(password: str) -> str:
+    """Pre-hash password with SHA256 to avoid bcrypt's 72-byte limit."""
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    prehashed = _prehash_password(plain_password)
+    return pwd_context.verify(prehashed, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
     """Hash a password."""
-    return pwd_context.hash(password)
+    prehashed = _prehash_password(password)
+    return pwd_context.hash(prehashed)
 
 
 def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
