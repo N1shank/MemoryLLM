@@ -127,48 +127,87 @@ class GeminiAgent:
         memory_context = None
 
         try:
-            async with notion_client.connect() as client:
-                # Get Notion tools
-                notion_tools = client.get_tools_for_gemini()
-                
-                # Build conversation history
-                gemini_history = []
-                for msg in conversation_history:
-                    gemini_history.append({
-                        "role": "user" if msg["role"] == "user" else "model",
-                        "parts": [msg["content"]],
-                    })
+            # Try with Notion first
+            try:
+                async with notion_client.connect() as client:
+                    # Get Notion tools
+                    notion_tools = client.get_tools_for_gemini()
+                    
+                    # Build conversation history
+                    gemini_history = []
+                    for msg in conversation_history:
+                        gemini_history.append({
+                            "role": "user" if msg["role"] == "user" else "model",
+                            "parts": [msg["content"]],
+                        })
 
-                tools = None
-                if notion_tools:
-                    tools = self._convert_to_gemini_tools(notion_tools)
+                    tools = None
+                    if notion_tools:
+                        tools = self._convert_to_gemini_tools(notion_tools)
 
-                chat = self.model.start_chat(history=gemini_history)
-                full_message = f"{SYSTEM_PROMPT}\n\nUser: {message}"
-                
-                # First, handle any tool calls (non-streaming)
-                response, actions = await self._generate_with_tools(
-                    chat, full_message, tools, client
-                )
-                memory_actions = actions
-                
-                if memory_actions:
-                    memory_context = " | ".join(memory_actions)
-                
-                # Stream the final response
-                # Since Gemini's streaming with tools is complex,
-                # we simulate streaming by chunking the response
-                words = response.split()
-                chunk_size = 3  # Send 3 words at a time
+                    chat = self.model.start_chat(history=gemini_history)
+                    full_message = f"{SYSTEM_PROMPT}\n\nUser: {message}"
+                    
+                    # First, handle any tool calls (non-streaming)
+                    response, actions = await self._generate_with_tools(
+                        chat, full_message, tools, client
+                    )
+                    memory_actions = actions
+                    
+                    if memory_actions:
+                        memory_context = " | ".join(memory_actions)
+                    
+                    # Stream the final response
+                    # Since Gemini's streaming with tools is complex,
+                    # we simulate streaming by chunking the response
+                    words = response.split()
+                    chunk_size = 3  # Send 3 words at a time
+                    
+                    for i in range(0, len(words), chunk_size):
+                        chunk = " ".join(words[i:i + chunk_size])
+                        if i > 0:
+                            chunk = " " + chunk
+                        yield chunk, memory_context if i == 0 else None
+                    return
+            except Exception as notion_error:
+                logger.warning(f"Notion connection failed, falling back to direct Gemini: {notion_error}")
+                # Fall through to fallback
+        
+            # Fallback: Use Gemini without Notion tools
+            gemini_history = []
+            for msg in conversation_history:
+                gemini_history.append({
+                    "role": "user" if msg["role"] == "user" else "model",
+                    "parts": [msg["content"]],
+                })
+            
+            chat = self.model.start_chat(history=gemini_history)
+            full_message = f"{SYSTEM_PROMPT}\n\n(Note: Notion memory is currently unavailable)\n\nUser: {message}"
+            
+            response = chat.send_message(
+                full_message,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.7,
+                    max_output_tokens=2048,
+                ),
+            )
+            
+            if response.candidates and response.candidates[0].content.parts:
+                response_text = response.candidates[0].content.parts[0].text
+                # Stream the response
+                words = response_text.split()
+                chunk_size = 3
                 
                 for i in range(0, len(words), chunk_size):
                     chunk = " ".join(words[i:i + chunk_size])
                     if i > 0:
                         chunk = " " + chunk
-                    yield chunk, memory_context if i == 0 else None
+                    yield chunk, "Notion unavailable" if i == 0 else None
+            else:
+                yield "I apologize, but I couldn't generate a response.", None
         
         except Exception as e:
-            logger.error(f"Streaming error: {e}")
+            logger.error(f"Streaming error: {e}", exc_info=True)
             yield f"Error: {str(e)}", None
 
     def _convert_to_gemini_tools(self, mcp_tools: list[dict]) -> list:

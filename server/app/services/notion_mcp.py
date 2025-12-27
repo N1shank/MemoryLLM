@@ -24,34 +24,49 @@ class NotionMCPClient:
     @asynccontextmanager
     async def connect(self):
         """Connect to the Notion MCP server."""
-        server_params = StdioServerParameters(
-            command=settings.NOTION_MCP_SERVER_PATH,
-            args=settings.NOTION_MCP_SERVER_ARGS,
-            env={"OPENAPI_MCP_HEADERS": json.dumps({
-                "Authorization": f"Bearer {settings.NOTION_API_KEY}",
-                "Notion-Version": "2022-06-28"
-            })}
-        )
+        if not settings.NOTION_API_KEY:
+            logger.warning("Notion API key not configured, skipping Notion connection")
+            yield self
+            return
+        
+        try:
+            server_params = StdioServerParameters(
+                command=settings.NOTION_MCP_SERVER_PATH,
+                args=settings.NOTION_MCP_SERVER_ARGS,
+                env={"OPENAPI_MCP_HEADERS": json.dumps({
+                    "Authorization": f"Bearer {settings.NOTION_API_KEY}",
+                    "Notion-Version": "2022-06-28"
+                })}
+            )
 
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                self.session = session
-                
-                # Cache available tools
-                tools_response = await session.list_tools()
-                self._tools = [
-                    {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "input_schema": tool.inputSchema,
-                    }
-                    for tool in tools_response.tools
-                ]
-                
-                yield self
-                
-                self.session = None
+            async with stdio_client(server_params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    self.session = session
+                    
+                    # Cache available tools
+                    try:
+                        tools_response = await session.list_tools()
+                        self._tools = [
+                            {
+                                "name": tool.name,
+                                "description": tool.description,
+                                "input_schema": tool.inputSchema,
+                            }
+                            for tool in tools_response.tools
+                        ]
+                    except Exception as e:
+                        logger.error(f"Error listing Notion tools: {e}", exc_info=True)
+                        self._tools = []
+                    
+                    yield self
+                    
+                    self.session = None
+        except Exception as e:
+            logger.error(f"Error connecting to Notion MCP: {e}", exc_info=True)
+            self.session = None
+            self._tools = []
+            yield self
 
     def get_tools_for_gemini(self) -> list[dict]:
         """Get tools formatted for Gemini function calling."""
