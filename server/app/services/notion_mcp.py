@@ -17,14 +17,21 @@ logger = logging.getLogger(__name__)
 class NotionMCPClient:
     """Client for interacting with Notion via MCP protocol."""
 
-    def __init__(self):
+    def __init__(self, api_key: str | None = None):
+        """
+        Initialize Notion MCP client.
+        
+        Args:
+            api_key: Notion API key. If None, falls back to global settings.NOTION_API_KEY.
+        """
+        self.api_key = api_key or settings.NOTION_API_KEY
         self.session: ClientSession | None = None
         self._tools: list[dict] = []
 
     @asynccontextmanager
     async def connect(self):
         """Connect to the Notion MCP server."""
-        if not settings.NOTION_API_KEY:
+        if not self.api_key:
             logger.warning("Notion API key not configured, skipping Notion connection")
             yield self
             return
@@ -34,7 +41,7 @@ class NotionMCPClient:
                 command=settings.NOTION_MCP_SERVER_PATH,
                 args=settings.NOTION_MCP_SERVER_ARGS,
                 env={"OPENAPI_MCP_HEADERS": json.dumps({
-                    "Authorization": f"Bearer {settings.NOTION_API_KEY}",
+                    "Authorization": f"Bearer {self.api_key}",
                     "Notion-Version": "2022-06-28"
                 })}
             )
@@ -100,6 +107,11 @@ class NotionMCPClient:
             raise
 
 
-# Singleton instance
+# Factory function to create client instances
+def create_notion_client(api_key: str | None = None) -> NotionMCPClient:
+    """Create a Notion MCP client instance with optional API key."""
+    return NotionMCPClient(api_key=api_key)
+
+# Default singleton instance (for backward compatibility)
 notion_client = NotionMCPClient()
 

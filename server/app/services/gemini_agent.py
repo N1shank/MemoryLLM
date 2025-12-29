@@ -9,7 +9,8 @@ import google.generativeai as genai
 from google.api_core import exceptions as google_exceptions
 
 from app.core.config import settings
-from app.services.notion_mcp import notion_client
+from app.core.security import decrypt_api_key
+from app.services.notion_mcp import create_notion_client
 
 logger = logging.getLogger(__name__)
 

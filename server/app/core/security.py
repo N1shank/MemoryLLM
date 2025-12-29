@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import bcrypt
+from cryptography.fernet import Fernet
 from jose import JWTError, jwt
 
 from app.core.config import settings
@@ -60,4 +61,35 @@ def decode_access_token(token: str) -> dict[str, Any] | None:
         return payload
     except JWTError:
         return None
+
+
+def _get_encryption_key() -> bytes:
+    """Get encryption key from JWT secret."""
+    # Use SHA256 hash of JWT secret as key (32 bytes for Fernet)
+    key = hashlib.sha256(settings.JWT_SECRET_KEY.encode()).digest()
+    # Fernet requires base64-encoded 32-byte key, so we use base64 encoding
+    from base64 import urlsafe_b64encode
+    return urlsafe_b64encode(key)
+
+
+def encrypt_api_key(api_key: str) -> str:
+    """Encrypt an API key for storage."""
+    if not api_key:
+        return ""
+    f = Fernet(_get_encryption_key())
+    encrypted = f.encrypt(api_key.encode())
+    return encrypted.decode()
+
+
+def decrypt_api_key(encrypted_key: str) -> str:
+    """Decrypt an API key from storage."""
+    if not encrypted_key:
+        return ""
+    try:
+        f = Fernet(_get_encryption_key())
+        decrypted = f.decrypt(encrypted_key.encode())
+        return decrypted.decode()
+    except Exception:
+        # If decryption fails, return empty string
+        return ""
 
