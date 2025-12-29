@@ -9,6 +9,7 @@ class UserResponse(BaseModel):
     name: str
     email: str
     username: str
+    notion_api_key_configured: bool = False
 
     class Config:
         from_attributes = True
@@ -25,4 +26,9 @@ class PasswordChange(BaseModel):
     """Schema for changing password."""
     current_password: str
     new_password: str = Field(..., min_length=6, max_length=100)
+
+
+class NotionApiKeyUpdate(BaseModel):
+    """Schema for updating Notion API key."""
+    api_key: str | None = Field(None, description="Notion API key. Set to empty string to remove.")
 

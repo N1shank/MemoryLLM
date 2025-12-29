@@ -50,7 +50,13 @@ async def signup(user_data: UserCreate, db: DBSession) -> Token:
     
     return Token(
         access_token=access_token,
-        user=UserResponse.model_validate(user),
+        user=UserResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            username=user.username,
+            notion_api_key_configured=bool(user.notion_api_key),
+        ),
     )
 
 
@@ -81,7 +87,13 @@ async def login(credentials: UserLogin, db: DBSession) -> Token:
     
     return Token(
         access_token=access_token,
-        user=UserResponse.model_validate(user),
+        user=UserResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            username=user.username,
+            notion_api_key_configured=bool(user.notion_api_key),
+        ),
     )
 
 
@@ -121,5 +133,11 @@ async def get_me(
     if user is None:
         raise UnauthorizedError("User not found")
     
-    return UserResponse.model_validate(user)
+    return UserResponse(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        username=user.username,
+        notion_api_key_configured=bool(user.notion_api_key),
+    )
 

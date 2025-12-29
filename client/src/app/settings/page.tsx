@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   ArrowLeft, User, Mail, AtSign, Lock, Trash2, 
-  Loader2, Check, AlertCircle, Eye, EyeOff
+  Loader2, Check, AlertCircle, Eye, EyeOff, BookOpen, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { userApi, ApiClientError } from '@/lib/api';
+import { userApi, ApiClientError, setStoredUser } from '@/lib/api';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -31,6 +31,13 @@ export default function SettingsPage() {
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   
+  // Notion integration
+  const [notionApiKey, setNotionApiKey] = useState('');
+  const [showNotionKey, setShowNotionKey] = useState(false);
+  const [notionLoading, setNotionLoading] = useState(false);
+  const [notionSuccess, setNotionSuccess] = useState(false);
+  const [notionError, setNotionError] = useState('');
+
   // Delete account
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -48,6 +55,10 @@ export default function SettingsPage() {
       setName(user.name);
       setEmail(user.email);
       setUsername(user.username);
+      // Don't load the actual API key, just show placeholder if configured
+      if (user.notion_api_key_configured) {
+        setNotionApiKey('••••••••••••••••');
+      }
     }
   }, [user]);
 
@@ -106,6 +117,38 @@ export default function SettingsPage() {
       setPasswordError(e instanceof ApiClientError ? e.message : 'Failed to change password');
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  const handleNotionSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setNotionError('');
+    setNotionSuccess(false);
+    setNotionLoading(true);
+
+    try {
+      // If the field shows the masked value, treat it as "no change"
+      if (notionApiKey === '••••••••••••••••') {
+        setNotionError('Please enter a new API key or leave empty to remove');
+        return;
+      }
+
+      await userApi.updateNotionApiKey(notionApiKey.trim() || null);
+      setNotionSuccess(true);
+      if (!notionApiKey.trim()) {
+        setNotionApiKey('');
+      } else {
+        setNotionApiKey('••••••••••••••••');
+      }
+      setTimeout(() => setNotionSuccess(false), 3000);
+      
+      // Refresh user data to update notion_api_key_configured status
+      const updatedUser = await userApi.getProfile();
+      setStoredUser(updatedUser);
+    } catch (e) {
+      setNotionError(e instanceof ApiClientError ? e.message : 'Failed to update Notion API key');
+    } finally {
+      setNotionLoading(false);
     }
   };
 
@@ -224,6 +267,91 @@ export default function SettingsPage() {
                 </>
               ) : (
                 'Save Changes'
+              )}
+            </button>
+          </form>
+        </section>
+
+        {/* Notion Integration Section */}
+        <section className="bg-chat-sidebar rounded-xl border border-chat-border p-6">
+          <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
+            <BookOpen size={20} className="text-chat-accent" />
+            Notion Integration
+          </h2>
+
+          <p className="text-chat-muted text-sm mb-4">
+            Connect your Notion workspace to enable the AI to read and write to your Notion pages. 
+            Your API key is encrypted and stored securely.
+          </p>
+
+          {notionError && (
+            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center gap-2">
+              <AlertCircle size={16} className="text-red-400" />
+              <span className="text-red-400 text-sm">{notionError}</span>
+            </div>
+          )}
+
+          {notionSuccess && (
+            <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center gap-2">
+              <Check size={16} className="text-green-400" />
+              <span className="text-green-400 text-sm">Notion API key updated successfully!</span>
+            </div>
+          )}
+
+          <form onSubmit={handleNotionSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+                <BookOpen size={14} className="text-chat-muted" />
+                Notion API Key
+              </label>
+              <div className="relative">
+                <input
+                  type={showNotionKey ? 'text' : 'password'}
+                  value={notionApiKey}
+                  onChange={(e) => {
+                    setNotionApiKey(e.target.value);
+                    setNotionError('');
+                  }}
+                  placeholder={user?.notion_api_key_configured ? 'Enter new key to update' : 'Enter your Notion API key'}
+                  className="w-full px-4 py-3 pr-12 rounded-lg bg-chat-input border border-chat-border focus:border-chat-accent focus:outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNotionKey(!showNotionKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-chat-muted hover:text-foreground transition-colors"
+                >
+                  {showNotionKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              <p className="text-xs text-chat-muted mt-2">
+                Leave empty to remove your Notion integration
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 text-sm text-chat-muted">
+              <a
+                href="https://www.notion.so/my-integrations"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-chat-accent hover:text-chat-accent-hover transition-colors"
+              >
+                Get your Notion API key
+                <ExternalLink size={14} />
+              </a>
+            </div>
+
+            <button
+              type="submit"
+              disabled={notionLoading}
+              className="px-6 py-2.5 rounded-lg bg-chat-accent hover:bg-chat-accent-hover disabled:opacity-50 font-medium transition-colors flex items-center gap-2"
+            >
+              {notionLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                user?.notion_api_key_configured ? 'Update API Key' : 'Connect Notion'
               )}
             </button>
           </form>

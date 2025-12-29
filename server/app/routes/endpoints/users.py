@@ -4,9 +4,9 @@ from fastapi import APIRouter
 from sqlalchemy import select
 
 from app.core.deps import DBSession, CurrentUser
-from app.core.security import verify_password, get_password_hash
+from app.core.security import verify_password, get_password_hash, encrypt_api_key
 from app.core.exceptions import BadRequestError
-from app.schemas.user import UserUpdate, PasswordChange, UserResponse
+from app.schemas.user import UserUpdate, PasswordChange, UserResponse, NotionApiKeyUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -14,7 +14,13 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("/me", response_model=UserResponse)
 async def get_profile(current_user: CurrentUser) -> UserResponse:
     """Get the current user's profile."""
-    return UserResponse.model_validate(current_user)
+    return UserResponse(
+        id=current_user.id,
+        name=current_user.name,
+        email=current_user.email,
+        username=current_user.username,
+        notion_api_key_configured=bool(current_user.notion_api_key),
+    )
 
 
 @router.patch("/me", response_model=UserResponse)
@@ -51,7 +57,13 @@ async def update_profile(
     await db.commit()
     await db.refresh(current_user)
     
-    return UserResponse.model_validate(current_user)
+    return UserResponse(
+        id=current_user.id,
+        name=current_user.name,
+        email=current_user.email,
+        username=current_user.username,
+        notion_api_key_configured=bool(current_user.notion_api_key),
+    )
 
 
 @router.post("/me/password")
@@ -77,6 +89,28 @@ async def change_password(
     await db.commit()
     
     return {"message": "Password updated successfully"}
+
+
+@router.post("/me/notion-api-key")
+async def update_notion_api_key(
+    data: NotionApiKeyUpdate,
+    db: DBSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Update the current user's Notion API key."""
+    # Encrypt and store the API key
+    if data.api_key:
+        # Validate that it's not empty
+        if not data.api_key.strip():
+            raise BadRequestError("Notion API key cannot be empty")
+        current_user.notion_api_key = encrypt_api_key(data.api_key.strip())
+    else:
+        # Clear the API key if empty string is provided
+        current_user.notion_api_key = None
+    
+    await db.commit()
+    
+    return {"message": "Notion API key updated successfully"}
 
 
 @router.delete("/me")

@@ -44,6 +44,7 @@ class GeminiAgent:
         self,
         message: str,
         conversation_history: list[dict],
+        notion_api_key: str | None = None,
     ) -> tuple[str, str | None]:
         """
         Process a chat message with memory capabilities.
@@ -53,8 +54,14 @@ class GeminiAgent:
         """
         memory_actions: list[str] = []
 
+        # Decrypt API key if provided
+        decrypted_key = None
+        if notion_api_key:
+            decrypted_key = decrypt_api_key(notion_api_key)
+
         try:
-            async with notion_client.connect() as client:
+            notion_client_instance = create_notion_client(api_key=decrypted_key)
+            async with notion_client_instance.connect() as client:
                 # Get Notion tools for function calling
                 notion_tools = client.get_tools_for_gemini()
                 
@@ -124,6 +131,7 @@ class GeminiAgent:
         self,
         message: str,
         conversation_history: list[dict],
+        notion_api_key: str | None = None,
     ) -> AsyncGenerator[tuple[str, str | None], None]:
         """
         Process a chat message with streaming response.
@@ -134,10 +142,16 @@ class GeminiAgent:
         memory_actions: list[str] = []
         memory_context = None
 
+        # Decrypt API key if provided
+        decrypted_key = None
+        if notion_api_key:
+            decrypted_key = decrypt_api_key(notion_api_key)
+
         try:
             # Try with Notion first
             try:
-                async with notion_client.connect() as client:
+                notion_client_instance = create_notion_client(api_key=decrypted_key)
+                async with notion_client_instance.connect() as client:
                     # Get Notion tools
                     notion_tools = client.get_tools_for_gemini()
                     

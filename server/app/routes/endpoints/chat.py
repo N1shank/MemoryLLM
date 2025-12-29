@@ -79,6 +79,7 @@ async def chat(
         response_text, memory_context = await gemini_agent.chat(
             message=request.message,
             conversation_history=history,
+            notion_api_key=current_user.notion_api_key,
         )
     except Exception as e:
         logger.error(f"Gemini agent error: {e}")
@@ -169,6 +170,7 @@ async def chat_stream(
             async for chunk, context in gemini_agent.chat_stream(
                 message=request.message,
                 conversation_history=history,
+                notion_api_key=current_user.notion_api_key,
             ):
                 full_response += chunk
                 if context:
