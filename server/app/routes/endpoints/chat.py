@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.core.database import async_session
 from app.core.deps import DBSession, CurrentUser
 from app.core.exceptions import NotFoundError, ForbiddenError, ServiceUnavailableError
 from app.models.conversation import Conversation, Message
@@ -177,22 +178,25 @@ async def chat_stream(
                 data = json.dumps({"type": "chunk", "content": chunk})
                 yield f"data: {data}\n\n"
             
-            # Save the complete response to database
-            async with db.begin():
-                assistant_message = Message(
-                    conversation_id=conversation_id,
-                    role="assistant",
-                    content=full_response,
-                    memory_context=memory_context,
-                )
-                db.add(assistant_message)
-                await db.flush()
-                await db.refresh(assistant_message)
+            # Save the complete response to database using a new session
+            async with async_session() as new_db:
+                async with new_db.begin():
+                    assistant_message = Message(
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=full_response,
+                        memory_context=memory_context,
+                    )
+                    new_db.add(assistant_message)
+                    await new_db.flush()
+                    await new_db.refresh(assistant_message)
+                    
+                    message_id = assistant_message.id
                 
                 # Send completion event with message ID
                 done_data = json.dumps({
                     "type": "done",
-                    "message_id": assistant_message.id,
+                    "message_id": message_id,
                     "conversation_id": conversation_id,
                     "memory_context": memory_context,
                 })
