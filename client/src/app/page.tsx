@@ -874,10 +874,17 @@ export default function Home() {
         </div>
 
         <div className="p-3 border-t border-chat-border space-y-2">
-          <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400">
-            <Brain size={16} className="text-chat-accent animate-pulse-soft" />
-            <span>Notion Memory Active</span>
-          </div>
+          {user?.notion_api_key_configured ? (
+            <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400">
+              <Brain size={16} className="text-chat-accent animate-pulse-soft" />
+              <span>Notion Memory Active</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500">
+              <Brain size={16} className="text-gray-500" />
+              <span>Notion Memory Inactive</span>
+            </div>
+          )}
           
           <div className="flex items-center justify-between px-3 py-2">
             <div className="flex items-center gap-2">

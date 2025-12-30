@@ -8,11 +8,11 @@ import {
   Loader2, Check, AlertCircle, Eye, EyeOff, BookOpen, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { userApi, ApiClientError, setStoredUser } from '@/lib/api';
+import { userApi, ApiClientError } from '@/lib/api';
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
+  const { user, isLoading: authLoading, isAuthenticated, logout, refreshUser } = useAuth();
   
   // Profile form
   const [name, setName] = useState('');
@@ -143,8 +143,7 @@ export default function SettingsPage() {
       setTimeout(() => setNotionSuccess(false), 3000);
       
       // Refresh user data to update notion_api_key_configured status
-      const updatedUser = await userApi.getProfile();
-      setStoredUser(updatedUser);
+      await refreshUser();
     } catch (e) {
       setNotionError(e instanceof ApiClientError ? e.message : 'Failed to update Notion API key');
     } finally {

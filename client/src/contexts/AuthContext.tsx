@@ -18,6 +18,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>;
   signup: (name: string, email: string, username: string, password: string) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   error: string | null;
   clearError: () => void;
 }
@@ -101,6 +102,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    try {
+      const updatedUser = await authApi.getMe();
+      setUser(updatedUser);
+      setStoredUser(updatedUser);
+    } catch (e) {
+      // If refresh fails, user might be logged out
+      console.error('Failed to refresh user:', e);
+    }
+  }, []);
+
   const clearError = useCallback(() => {
     setError(null);
   }, []);
@@ -114,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         signup,
         logout,
+        refreshUser,
         error,
         clearError,
       }}
