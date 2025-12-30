@@ -37,6 +37,7 @@ export default function SettingsPage() {
   const [notionLoading, setNotionLoading] = useState(false);
   const [notionSuccess, setNotionSuccess] = useState(false);
   const [notionError, setNotionError] = useState('');
+  const [isValidating, setIsValidating] = useState(false);
 
   // Delete account
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -55,10 +56,10 @@ export default function SettingsPage() {
       setName(user.name);
       setEmail(user.email);
       setUsername(user.username);
-      // Don't load the actual API key, just show placeholder if configured
-      if (user.notion_api_key_configured) {
-        setNotionApiKey('••••••••••••••••');
-      }
+      // Reset API key field - we can't show the actual encrypted key
+      // User needs to enter a new key to update, or leave empty to remove
+      setNotionApiKey('');
+      setShowNotionKey(false);
     }
   }, [user]);
 
@@ -124,29 +125,58 @@ export default function SettingsPage() {
     e.preventDefault();
     setNotionError('');
     setNotionSuccess(false);
+    
+    const trimmedKey = notionApiKey.trim();
+    
+    // If empty, remove the integration
+    if (!trimmedKey) {
+      setNotionLoading(true);
+      try {
+        await userApi.updateNotionApiKey(null);
+        setNotionSuccess(true);
+        setNotionApiKey('');
+        setTimeout(() => setNotionSuccess(false), 3000);
+        await refreshUser();
+      } catch (e) {
+        setNotionError(e instanceof ApiClientError ? e.message : 'Failed to remove Notion integration');
+      } finally {
+        setNotionLoading(false);
+      }
+      return;
+    }
+
+    // Validate and save the key
+    setIsValidating(true);
     setNotionLoading(true);
 
     try {
-      // If the field shows the masked value, treat it as "no change"
-      if (notionApiKey === '••••••••••••••••') {
-        setNotionError('Please enter a new API key or leave empty to remove');
+      // First validate the key
+      const validation = await userApi.validateNotionApiKey(trimmedKey);
+      
+      if (!validation.valid) {
+        setNotionError(validation.message);
+        setIsValidating(false);
+        setNotionLoading(false);
         return;
       }
 
-      await userApi.updateNotionApiKey(notionApiKey.trim() || null);
+      // Key is valid, now save it
+      const result = await userApi.updateNotionApiKey(trimmedKey);
       setNotionSuccess(true);
-      if (!notionApiKey.trim()) {
-        setNotionApiKey('');
-      } else {
-        setNotionApiKey('••••••••••••••••');
-      }
-      setTimeout(() => setNotionSuccess(false), 3000);
+      setNotionApiKey(''); // Clear the field after successful save
+      setShowNotionKey(false);
+      setTimeout(() => setNotionSuccess(false), 5000);
       
       // Refresh user data to update notion_api_key_configured status
       await refreshUser();
     } catch (e) {
-      setNotionError(e instanceof ApiClientError ? e.message : 'Failed to update Notion API key');
+      if (e instanceof ApiClientError) {
+        setNotionError(e.message);
+      } else {
+        setNotionError('Failed to update Notion API key. Please try again.');
+      }
     } finally {
+      setIsValidating(false);
       setNotionLoading(false);
     }
   };
@@ -293,7 +323,7 @@ export default function SettingsPage() {
           {notionSuccess && (
             <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center gap-2">
               <Check size={16} className="text-green-400" />
-              <span className="text-green-400 text-sm">Notion API key updated successfully!</span>
+              <span className="text-green-400 text-sm">Notion API key validated and connected successfully!</span>
             </div>
           )}
 
@@ -311,7 +341,7 @@ export default function SettingsPage() {
                     setNotionApiKey(e.target.value);
                     setNotionError('');
                   }}
-                  placeholder={user?.notion_api_key_configured ? 'Enter new key to update' : 'Enter your Notion API key'}
+                  placeholder={user?.notion_api_key_configured ? 'Enter new key to update (current key is encrypted)' : 'Enter your Notion API key'}
                   className="w-full px-4 py-3 pr-12 rounded-lg bg-chat-input border border-chat-border focus:border-chat-accent focus:outline-none transition-colors"
                 />
                 <button
@@ -323,7 +353,9 @@ export default function SettingsPage() {
                 </button>
               </div>
               <p className="text-xs text-chat-muted mt-2">
-                Leave empty to remove your Notion integration
+                {user?.notion_api_key_configured 
+                  ? 'Enter a new key to update, or leave empty to remove your Notion integration'
+                  : 'Leave empty to remove your Notion integration'}
               </p>
             </div>
 
@@ -347,7 +379,7 @@ export default function SettingsPage() {
               {notionLoading ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  Saving...
+                  {isValidating ? 'Validating...' : 'Saving...'}
                 </>
               ) : (
                 user?.notion_api_key_configured ? 'Update API Key' : 'Connect Notion'

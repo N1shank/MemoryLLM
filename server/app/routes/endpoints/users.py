@@ -1,5 +1,7 @@
 """User profile management API endpoints."""
 
+import httpx
+import logging
 from fastapi import APIRouter
 from sqlalchemy import select
 
@@ -8,7 +10,57 @@ from app.core.security import verify_password, get_password_hash, encrypt_api_ke
 from app.core.exceptions import BadRequestError
 from app.schemas.user import UserUpdate, PasswordChange, UserResponse, NotionApiKeyUpdate
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+async def validate_notion_api_key(api_key: str) -> tuple[bool, str]:
+    """
+    Validate a Notion API key by making a test request to Notion API.
+    
+    Returns:
+        tuple of (is_valid, error_message)
+    """
+    if not api_key or not api_key.strip():
+        return False, "Notion API key cannot be empty"
+    
+    api_key = api_key.strip()
+    
+    # Basic format validation - Notion API keys typically start with "secret_"
+    if not api_key.startswith("secret_"):
+        return False, "Invalid Notion API key format. Notion API keys should start with 'secret_'. Please check the link below for help."
+    
+    # Test the key by making a request to Notion API
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Try to list users (a simple endpoint that requires valid auth)
+            response = await client.get(
+                "https://api.notion.com/v1/users/me",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Notion-Version": "2022-06-28",
+                },
+            )
+            
+            if response.status_code == 200:
+                return True, "Notion API key is valid and connected successfully!"
+            elif response.status_code == 401:
+                return False, "Invalid or expired Notion API key. Please check your key and try again. Use the link below for help."
+            elif response.status_code == 403:
+                return False, "Notion API key doesn't have required permissions. Please check your integration settings in Notion."
+            else:
+                error_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+                error_msg = error_data.get("message", f"Notion API returned status {response.status_code}")
+                return False, f"Failed to connect to Notion: {error_msg}. Please check your key and try again."
+                
+    except httpx.TimeoutException:
+        return False, "Connection to Notion API timed out. Please check your internet connection and try again."
+    except httpx.RequestError as e:
+        return False, f"Failed to connect to Notion API: {str(e)}. Please check your internet connection and try again."
+    except Exception as e:
+        logger.error(f"Unexpected error validating Notion API key: {e}", exc_info=True)
+        return False, f"An unexpected error occurred while validating the key: {str(e)}"
 
 
 @router.get("/me", response_model=UserResponse)
@@ -97,12 +149,15 @@ async def update_notion_api_key(
     db: DBSession,
     current_user: CurrentUser,
 ) -> dict:
-    """Update the current user's Notion API key."""
-    # Encrypt and store the API key
+    """Update the current user's Notion API key with validation."""
     if data.api_key:
-        # Validate that it's not empty
-        if not data.api_key.strip():
-            raise BadRequestError("Notion API key cannot be empty")
+        # Validate the API key before saving
+        is_valid, message = await validate_notion_api_key(data.api_key)
+        
+        if not is_valid:
+            raise BadRequestError(message)
+        
+        # Encrypt and store the validated API key
         current_user.notion_api_key = encrypt_api_key(data.api_key.strip())
     else:
         # Clear the API key if empty string is provided
@@ -110,7 +165,26 @@ async def update_notion_api_key(
     
     await db.commit()
     
-    return {"message": "Notion API key updated successfully"}
+    return {
+        "message": "Notion API key validated and saved successfully!",
+        "validated": True
+    }
+
+
+@router.post("/me/notion-api-key/validate")
+async def validate_notion_api_key_endpoint(
+    data: NotionApiKeyUpdate,
+) -> dict:
+    """Validate a Notion API key without saving it."""
+    if not data.api_key:
+        raise BadRequestError("Please provide a Notion API key to validate")
+    
+    is_valid, message = await validate_notion_api_key(data.api_key)
+    
+    return {
+        "valid": is_valid,
+        "message": message
+    }
 
 
 @router.delete("/me")
