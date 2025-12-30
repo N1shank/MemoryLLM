@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Sparkles, Brain, Loader2, AlertCircle, ExternalLink } from 'lucide-react';
+import { Brain, Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { shareApi, SharedConversation, ApiClientError } from '@/lib/api';
 import { CodeBlock, InlineCode } from '@/components/CodeBlock';
@@ -71,8 +71,8 @@ function SharedConversationContent() {
       <header className="border-b border-chat-border bg-chat-bg/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-chat-accent to-purple-600 flex items-center justify-center glow-accent">
-              <Sparkles size={20} className="text-white" />
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center glow-accent">
+              <Brain size={20} className="text-white" />
             </div>
             <div>
               <h1 className="font-semibold">{conversation.title}</h1>
@@ -105,8 +105,8 @@ function SharedConversationContent() {
               </div>
             ) : (
               <div className="flex gap-4">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-purple-600 flex items-center justify-center shrink-0 glow-accent">
-                  <Sparkles size={14} className="text-white" />
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center shrink-0 glow-accent">
+                  <Brain size={14} className="text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
                   {message.memory_context && (
@@ -153,7 +153,7 @@ function SharedConversationContent() {
           href="/"
           className="inline-flex items-center gap-2 text-chat-accent hover:underline"
         >
-          <Sparkles size={16} />
+          <Brain size={16} />
           Start your own conversation
         </Link>
       </footer>

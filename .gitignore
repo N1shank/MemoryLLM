@@ -75,3 +75,7 @@ logs/
 uploads/
 server/uploads/
 
+*node_modules*
+*.next
+*.md
+

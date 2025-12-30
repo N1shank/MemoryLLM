@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  Send, Plus, Sparkles, Brain, Menu, X, LogOut, 
+  Send, Plus, Brain, Menu, X, LogOut, 
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
   Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
   Settings
@@ -925,8 +925,8 @@ export default function Home() {
             {mobileMenuOpen || sidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-purple-600 flex items-center justify-center glow-accent">
-              <Sparkles size={16} className="text-white" />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center glow-accent">
+              <Brain size={16} className="text-white" />
             </div>
             <span className="font-semibold">MemoryLLM</span>
           </div>
@@ -997,8 +997,8 @@ export default function Home() {
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center px-4">
               <div className="max-w-lg text-center">
-                <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-chat-accent to-purple-600 flex items-center justify-center glow-accent">
-                  <Sparkles size={36} className="text-white" />
+                <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center glow-accent">
+                  <Brain size={36} className="text-white" />
                 </div>
                 <h1 className="text-3xl font-bold mb-3">MemoryLLM</h1>
                 <p className="text-gray-400 mb-8 text-lg">
@@ -1091,8 +1091,8 @@ export default function Home() {
                     </div>
                   ) : (
                     <div className="flex gap-4">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-purple-600 flex items-center justify-center shrink-0 glow-accent">
-                        <Sparkles size={14} className="text-white" />
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center shrink-0 glow-accent">
+                        <Brain size={14} className="text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
                         {message.memory_context && (

@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles } from 'lucide-react';
+import { Brain } from 'lucide-react';
 
 interface TypingIndicatorProps {
   variant?: 'dots' | 'shimmer' | 'text';
@@ -10,8 +10,8 @@ export function TypingIndicator({ variant = 'dots' }: TypingIndicatorProps) {
   if (variant === 'shimmer') {
     return (
       <div className="flex gap-4">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-purple-600 flex items-center justify-center shrink-0 glow-accent">
-          <Sparkles size={14} className="text-white" />
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center shrink-0 glow-accent">
+          <Brain size={14} className="text-white" />
         </div>
         <div className="flex-1 space-y-2">
           <div className="h-4 w-3/4 rounded shimmer" />
@@ -25,8 +25,8 @@ export function TypingIndicator({ variant = 'dots' }: TypingIndicatorProps) {
   if (variant === 'text') {
     return (
       <div className="flex gap-4">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-purple-600 flex items-center justify-center shrink-0 glow-accent animate-pulse">
-          <Sparkles size={14} className="text-white" />
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center shrink-0 glow-accent animate-pulse">
+          <Brain size={14} className="text-white" />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-chat-muted typing-cursor">Thinking</span>
@@ -38,8 +38,8 @@ export function TypingIndicator({ variant = 'dots' }: TypingIndicatorProps) {
   // Default: dots
   return (
     <div className="flex gap-4">
-      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-purple-600 flex items-center justify-center shrink-0 glow-accent">
-        <Sparkles size={14} className="text-white animate-pulse" />
+      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center shrink-0 glow-accent">
+        <Brain size={14} className="text-white animate-pulse" />
       </div>
       <div className="flex items-center gap-1 px-4 py-3 rounded-2xl bg-chat-input border border-chat-border">
         <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
