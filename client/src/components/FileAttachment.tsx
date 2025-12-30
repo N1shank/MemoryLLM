@@ -53,7 +53,7 @@ export function FileAttachmentButton({ onFileUploaded, disabled }: FileAttachmen
       <button
         onClick={handleClick}
         disabled={disabled || isUploading}
-        className="p-2 rounded-lg hover:bg-chat-hover text-chat-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="p-2.5 rounded-lg hover:bg-chat-hover text-chat-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
         title="Attach file"
       >
         {isUploading ? (

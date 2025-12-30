@@ -1184,11 +1184,13 @@ export default function Home() {
               </div>
             )}
             
-            <div className="relative flex items-end bg-chat-input rounded-2xl border border-chat-border focus-within:border-chat-accent/50 focus-within:ring-1 focus-within:ring-chat-accent/20 transition-all">
-              <FileAttachmentButton
-                onFileUploaded={(file) => setPendingAttachments(prev => [...prev, file])}
-                disabled={isLoading}
-              />
+            <div className="relative flex items-center bg-chat-input rounded-2xl border border-chat-border focus-within:border-chat-accent/50 focus-within:ring-1 focus-within:ring-chat-accent/20 transition-all">
+              <div className="flex items-center self-stretch">
+                <FileAttachmentButton
+                  onFileUploaded={(file) => setPendingAttachments(prev => [...prev, file])}
+                  disabled={isLoading}
+                />
+              </div>
               <textarea
                 ref={textareaRef}
                 value={input}
