@@ -9,6 +9,7 @@ import {
   getStoredUser,
   setStoredUser,
   ApiClientError,
+  getAuthToken,
 } from '@/lib/api';
 
 interface AuthContextType {
@@ -32,8 +33,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check for existing session on mount
   useEffect(() => {
+    const token = getAuthToken();
     const storedUser = getStoredUser();
-    if (storedUser) {
+    
+    // Only proceed if we have both token and user
+    if (token && storedUser) {
+      // Set user optimistically for better UX
       setUser(storedUser);
       // Verify token is still valid
       authApi.getMe()
@@ -41,13 +46,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(user);
           setStoredUser(user);
         })
-        .catch(() => {
-          // Token invalid, clear everything
+        .catch((e) => {
+          // Token invalid or expired, clear everything
+          console.error('Token validation failed:', e);
           clearAuthToken();
           setUser(null);
         })
         .finally(() => setIsLoading(false));
     } else {
+      // No token or user, clear any stale data
+      if (storedUser && !token) {
+        clearAuthToken();
+      }
       setIsLoading(false);
     }
   }, []);
