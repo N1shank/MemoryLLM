@@ -140,11 +140,11 @@ body {
 /* Typing dots animation */
 @keyframes typingDot {
   0%, 60%, 100% {
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
     opacity: 0.4;
   }
   30% {
-    transform: translateY(-6px);
+    transform: translateY(0) scale(1.2);
     opacity: 1;
   }
 }

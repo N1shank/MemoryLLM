@@ -86,10 +86,13 @@ export default function Home() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Redirect to login if not authenticated
+  // Redirect to login if not authenticated (only after auth check is complete)
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/auth/login');
+    // Wait for auth loading to complete before checking authentication
+    if (!authLoading) {
+      if (!isAuthenticated) {
+        router.push('/auth/login');
+      }
     }
   }, [authLoading, isAuthenticated, router]);
 

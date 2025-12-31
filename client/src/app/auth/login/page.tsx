@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,7 +8,14 @@ import { Eye, EyeOff, Brain, Loader2, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, error, clearError, isLoading } = useAuth();
+  const { login, error, clearError, isLoading, isAuthenticated, isLoading: authLoading } = useAuth();
+  
+  // Redirect to home if already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      router.push('/');
+    }
+  }, [authLoading, isAuthenticated, router]);
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -27,6 +34,8 @@ export default function LoginPage() {
 
     try {
       await login(username, password);
+      // Small delay to ensure state is fully set before redirect
+      await new Promise(resolve => setTimeout(resolve, 100));
       router.push('/');
     } catch {
       // Error is handled by context

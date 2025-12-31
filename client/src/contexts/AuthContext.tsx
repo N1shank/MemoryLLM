@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     // Only proceed if we have both token and user
     if (token && storedUser) {
-      // Set user optimistically for better UX
+      // Set user optimistically for better UX (prevents redirect during verification)
       setUser(storedUser);
       // Verify token is still valid
       authApi.getMe()
@@ -58,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (storedUser && !token) {
         clearAuthToken();
       }
+      setUser(null);
       setIsLoading(false);
     }
   }, []);
@@ -68,9 +69,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     try {
       const response = await authApi.login({ username, password });
+      // Set token and user synchronously before anything else
       setAuthToken(response.access_token);
       setStoredUser(response.user);
       setUser(response.user);
+      // Small delay to ensure state propagation
+      await new Promise(resolve => setTimeout(resolve, 50));
     } catch (e) {
       const message = e instanceof ApiClientError 
         ? e.message 
