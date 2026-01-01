@@ -5,7 +5,7 @@ import json
 import logging
 from typing import AsyncGenerator
 
-import google.generativeai as genai
+from google import genai
 from google.api_core import exceptions as google_exceptions
 
 from app.core.config import settings
@@ -13,9 +13,6 @@ from app.core.security import decrypt_api_key
 from app.services.notion_mcp import create_notion_client
 
 logger = logging.getLogger(__name__)
-
-# Configure Gemini
-genai.configure(api_key=settings.GEMINI_API_KEY)
 
 
 SYSTEM_PROMPT = """You are an intelligent AI assistant with access to a Notion workspace as your memory.
@@ -38,7 +35,14 @@ class GeminiAgent:
     """Gemini agent with Notion MCP tools for memory."""
 
     def __init__(self):
-        self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
+        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        self.model_name = settings.GEMINI_MODEL
+
+    def _get_client(self, api_key: str | None = None):
+        """Get a client instance, optionally with a different API key."""
+        if api_key:
+            return genai.Client(api_key=api_key)
+        return self.client
 
     async def chat(
         self,
@@ -61,30 +65,35 @@ class GeminiAgent:
 
         try:
             notion_client_instance = create_notion_client(api_key=decrypted_key)
-            async with notion_client_instance.connect() as client:
+            async with notion_client_instance.connect() as mcp_client:
                 # Get Notion tools for function calling
-                notion_tools = client.get_tools_for_gemini()
+                notion_tools = mcp_client.get_tools_for_gemini()
                 
-                # Build conversation for Gemini
-                gemini_history = []
+                # Build conversation contents for Gemini
+                contents = []
                 for msg in conversation_history:
-                    gemini_history.append({
+                    contents.append({
                         "role": "user" if msg["role"] == "user" else "model",
-                        "parts": [msg["content"]],
+                        "parts": [{"text": msg["content"]}],
                     })
 
-                # Create chat with tools
-                tools = None
-                if notion_tools:
-                    tools = self._convert_to_gemini_tools(notion_tools)
-
-                chat = self.model.start_chat(history=gemini_history)
-                
-                # Send message with system prompt context
+                # Add system instruction and current message
                 full_message = f"{SYSTEM_PROMPT}\n\nUser: {message}"
+                contents.append({
+                    "role": "user",
+                    "parts": [{"text": full_message}],
+                })
+
+                # Convert tools if available
+                tools_config = None
+                if notion_tools:
+                    tools_config = self._convert_to_gemini_tools(notion_tools)
+
+                # Get client (use async client if available)
+                client = self._get_client()
                 
                 response, actions = await self._generate_with_tools(
-                    chat, full_message, tools, client
+                    client, contents, tools_config, mcp_client
                 )
                 memory_actions = actions
                 
@@ -99,24 +108,31 @@ class GeminiAgent:
             logger.error(f"Error in chat: {e}")
             # Try without Notion tools as fallback
             try:
-                gemini_history = []
+                contents = []
                 for msg in conversation_history:
-                    gemini_history.append({
+                    contents.append({
                         "role": "user" if msg["role"] == "user" else "model",
-                        "parts": [msg["content"]],
+                        "parts": [{"text": msg["content"]}],
                     })
                 
-                chat = self.model.start_chat(history=gemini_history)
-                response = chat.send_message(
-                    f"{SYSTEM_PROMPT}\n\n(Note: Notion memory is currently unavailable)\n\nUser: {message}",
-                    generation_config=genai.GenerationConfig(
-                        temperature=0.7,
-                        max_output_tokens=2048,
-                    ),
+                contents.append({
+                    "role": "user",
+                    "parts": [{"text": f"{SYSTEM_PROMPT}\n\n(Note: Notion memory is currently unavailable)\n\nUser: {message}"}],
+                })
+                
+                client = self._get_client()
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model=self.model_name,
+                    contents=contents,
+                    config={
+                        "temperature": 0.7,
+                        "max_output_tokens": 2048,
+                    }
                 )
                 
-                if response.candidates and response.candidates[0].content.parts:
-                    return response.candidates[0].content.parts[0].text, "Notion unavailable"
+                if response.text:
+                    return response.text, "Notion unavailable"
                 return "I apologize, but I couldn't generate a response.", None
             except google_exceptions.ResourceExhausted as e:
                 error_msg = self._handle_rate_limit_error(e)
@@ -151,28 +167,32 @@ class GeminiAgent:
             # Try with Notion first
             try:
                 notion_client_instance = create_notion_client(api_key=decrypted_key)
-                async with notion_client_instance.connect() as client:
+                async with notion_client_instance.connect() as mcp_client:
                     # Get Notion tools
-                    notion_tools = client.get_tools_for_gemini()
+                    notion_tools = mcp_client.get_tools_for_gemini()
                     
                     # Build conversation history
-                    gemini_history = []
+                    contents = []
                     for msg in conversation_history:
-                        gemini_history.append({
+                        contents.append({
                             "role": "user" if msg["role"] == "user" else "model",
-                            "parts": [msg["content"]],
+                            "parts": [{"text": msg["content"]}],
                         })
 
-                    tools = None
+                    tools_config = None
                     if notion_tools:
-                        tools = self._convert_to_gemini_tools(notion_tools)
+                        tools_config = self._convert_to_gemini_tools(notion_tools)
 
-                    chat = self.model.start_chat(history=gemini_history)
                     full_message = f"{SYSTEM_PROMPT}\n\nUser: {message}"
+                    contents.append({
+                        "role": "user",
+                        "parts": [{"text": full_message}],
+                    })
                     
                     # First, handle any tool calls (non-streaming)
+                    client = self._get_client()
                     response, actions = await self._generate_with_tools(
-                        chat, full_message, tools, client
+                        client, contents, tools_config, mcp_client
                     )
                     memory_actions = actions
                     
@@ -196,24 +216,28 @@ class GeminiAgent:
                 # Fall through to fallback
         
             # Fallback: Use Gemini without Notion tools
-            gemini_history = []
+            contents = []
             for msg in conversation_history:
-                gemini_history.append({
+                contents.append({
                     "role": "user" if msg["role"] == "user" else "model",
-                    "parts": [msg["content"]],
+                    "parts": [{"text": msg["content"]}],
                 })
             
-            chat = self.model.start_chat(history=gemini_history)
-            full_message = f"{SYSTEM_PROMPT}\n\n(Note: Notion memory is currently unavailable)\n\nUser: {message}"
+            contents.append({
+                "role": "user",
+                "parts": [{"text": f"{SYSTEM_PROMPT}\n\n(Note: Notion memory is currently unavailable)\n\nUser: {message}"}],
+            })
             
-            generation_config = genai.GenerationConfig(
-                temperature=0.7,
-                max_output_tokens=2048,
-            )
-            
+            client = self._get_client()
             try:
-                response = await self._send_message_with_retry(
-                    chat, full_message, generation_config
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model=self.model_name,
+                    contents=contents,
+                    config={
+                        "temperature": 0.7,
+                        "max_output_tokens": 2048,
+                    }
                 )
             except google_exceptions.ResourceExhausted as e:
                 error_msg = self._handle_rate_limit_error(e)
@@ -225,8 +249,8 @@ class GeminiAgent:
                 yield error_msg, None
                 return
             
-            if response.candidates and response.candidates[0].content.parts:
-                response_text = response.candidates[0].content.parts[0].text
+            if response.text:
+                response_text = response.text
                 # Stream the response
                 words = response_text.split()
                 chunk_size = 3
@@ -243,8 +267,8 @@ class GeminiAgent:
             logger.error(f"Streaming error: {e}", exc_info=True)
             yield f"Error: {str(e)}", None
 
-    def _convert_to_gemini_tools(self, mcp_tools: list[dict]) -> list:
-        """Convert MCP tools to Gemini tool format."""
+    def _convert_to_gemini_tools(self, mcp_tools: list[dict]) -> dict:
+        """Convert MCP tools to Gemini tool format for new API."""
         function_declarations = []
         
         for tool in mcp_tools:
@@ -253,15 +277,13 @@ class GeminiAgent:
             if not parameters:
                 parameters = {"type": "object", "properties": {}}
             
-            function_declarations.append(
-                genai.protos.FunctionDeclaration(
-                    name=tool["name"],
-                    description=tool.get("description", ""),
-                    parameters=self._clean_schema(parameters),
-                )
-            )
+            function_declarations.append({
+                "name": tool["name"],
+                "description": tool.get("description", ""),
+                "parameters": self._clean_schema(parameters),
+            })
         
-        return [genai.protos.Tool(function_declarations=function_declarations)]
+        return {"function_declarations": function_declarations}
 
     def _clean_schema(self, schema: dict) -> dict:
         """Clean JSON schema for Gemini compatibility."""
@@ -316,61 +338,11 @@ class GeminiAgent:
             return "⚠️ API rate limit exceeded. Please check your Gemini API quota and billing at https://ai.dev/usage"
         return f"API Error: {error_str[:200]}"
     
-    async def _send_message_with_retry(
-        self,
-        chat,
-        message: str,
-        generation_config: genai.GenerationConfig,
-        tools: list | None = None,
-        max_retries: int = 3,
-    ):
-        """Send message with retry logic for rate limits."""
-        last_error = None
-        
-        for attempt in range(max_retries):
-            try:
-                # Run synchronous send_message in thread pool
-                if tools:
-                    return await asyncio.to_thread(
-                        chat.send_message,
-                        message,
-                        generation_config=generation_config,
-                        tools=tools,
-                    )
-                else:
-                    return await asyncio.to_thread(
-                        chat.send_message,
-                        message,
-                        generation_config=generation_config,
-                    )
-            except google_exceptions.ResourceExhausted as e:
-                last_error = e
-                # Check if error has retry delay
-                retry_delay = 20  # Default 20 seconds
-                error_str = str(e)
-                if "retry in" in error_str.lower():
-                    # Try to extract retry delay (usually in seconds)
-                    import re
-                    match = re.search(r'retry in ([\d.]+)s', error_str.lower())
-                    if match:
-                        retry_delay = max(20, int(float(match.group(1))) + 5)
-                
-                if attempt < max_retries - 1:
-                    logger.warning(f"Rate limit hit, retrying in {retry_delay}s (attempt {attempt + 1}/{max_retries})")
-                    await asyncio.sleep(retry_delay)
-                else:
-                    raise
-            except Exception as e:
-                # For other errors, raise immediately
-                raise
-        
-        raise last_error
-
     async def _generate_with_tools(
         self,
-        chat,
-        message: str,
-        tools: list | None,
+        client,
+        contents: list[dict],
+        tools_config: dict | None,
         mcp_client,
         max_iterations: int = 10,
     ) -> tuple[str, list[str]]:
@@ -382,17 +354,25 @@ class GeminiAgent:
         """
         memory_actions: list[str] = []
         
-        generation_config = genai.GenerationConfig(
-            temperature=0.7,
-            max_output_tokens=2048,
-        )
+        config = {
+            "temperature": 0.7,
+            "max_output_tokens": 2048,
+        }
         
-        current_message = message
+        current_contents = contents.copy()
         
         for _ in range(max_iterations):
             try:
-                response = await self._send_message_with_retry(
-                    chat, current_message, generation_config, tools
+                # Prepare request - tools go in config, not as separate parameter
+                request_config = config.copy()
+                if tools_config:
+                    request_config["tools"] = [tools_config]
+                
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model=self.model_name,
+                    contents=current_contents,
+                    config=request_config,
                 )
             except google_exceptions.ResourceExhausted as e:
                 error_msg = self._handle_rate_limit_error(e)
@@ -402,67 +382,87 @@ class GeminiAgent:
                 logger.error(f"Error generating response: {e}", exc_info=True)
                 return f"Error: {str(e)[:200]}", memory_actions
             
-            if not response.candidates:
+            if not response or not hasattr(response, 'text') and not hasattr(response, 'candidates'):
                 return "I apologize, but I couldn't generate a response.", memory_actions
             
-            candidate = response.candidates[0]
-            
-            # Check for function calls
+            # Check for function calls in the new API
             function_calls = []
-            for part in candidate.content.parts:
-                if hasattr(part, "function_call") and part.function_call:
-                    function_calls.append(part.function_call)
+            if hasattr(response, 'candidates') and response.candidates:
+                for candidate in response.candidates:
+                    if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                        for part in candidate.content.parts:
+                            if hasattr(part, 'function_call') and part.function_call:
+                                function_calls.append(part.function_call)
+            elif hasattr(response, 'function_calls'):
+                function_calls = response.function_calls
             
             if not function_calls:
                 # No function calls, return text response
-                text = ""
-                for part in candidate.content.parts:
-                    if hasattr(part, "text") and part.text:
-                        text += part.text
-                return text, memory_actions
+                if hasattr(response, 'text'):
+                    return response.text, memory_actions
+                elif hasattr(response, 'candidates') and response.candidates:
+                    # Extract text from candidates
+                    text_parts = []
+                    for candidate in response.candidates:
+                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                            for part in candidate.content.parts:
+                                if hasattr(part, 'text'):
+                                    text_parts.append(part.text)
+                    return "".join(text_parts), memory_actions
+                return "I apologize, but I couldn't generate a response.", memory_actions
             
             # Execute function calls
             function_responses = []
             for fc in function_calls:
                 try:
-                    args = dict(fc.args) if fc.args else {}
-                    result = await mcp_client.call_tool(fc.name, args)
+                    # Extract function name and args from new API structure
+                    if hasattr(fc, 'name'):
+                        func_name = fc.name
+                        func_args = dict(fc.args) if hasattr(fc, 'args') and fc.args else {}
+                    elif isinstance(fc, dict):
+                        func_name = fc.get("name", "")
+                        func_args = fc.get("args", {})
+                    else:
+                        func_name = str(fc)
+                        func_args = {}
+                    
+                    result = await mcp_client.call_tool(func_name, func_args)
                     function_responses.append({
-                        "name": fc.name,
+                        "name": func_name,
                         "response": {"result": result},
                     })
                     
                     # Track memory action
-                    action_desc = f"📝 {fc.name}"
-                    if "search" in fc.name.lower():
+                    action_desc = f"📝 {func_name}"
+                    if "search" in func_name.lower():
                         action_desc = f"🔍 Searched Notion"
-                    elif "create" in fc.name.lower():
+                    elif "create" in func_name.lower():
                         action_desc = f"✏️ Created in Notion"
-                    elif "update" in fc.name.lower():
+                    elif "update" in func_name.lower():
                         action_desc = f"📝 Updated Notion"
                     memory_actions.append(action_desc)
                     
-                    logger.info(f"Called tool {fc.name} with args {args}")
+                    logger.info(f"Called tool {func_name} with args {func_args}")
                 except Exception as e:
                     logger.error(f"Tool call failed: {e}")
+                    func_name = fc.name if hasattr(fc, 'name') else str(fc)
                     function_responses.append({
-                        "name": fc.name,
+                        "name": func_name,
                         "response": {"error": str(e)},
                     })
-                    memory_actions.append(f"❌ {fc.name} failed")
+                    memory_actions.append(f"❌ {func_name} failed")
             
-            # Send function responses back
-            current_message = genai.protos.Content(
-                parts=[
-                    genai.protos.Part(
-                        function_response=genai.protos.FunctionResponse(
-                            name=fr["name"],
-                            response=fr["response"],
-                        )
-                    )
-                    for fr in function_responses
-                ]
-            )
+            # Add function response to contents for next iteration
+            for fr in function_responses:
+                current_contents.append({
+                    "role": "model",
+                    "parts": [{
+                        "function_response": {
+                            "name": fr["name"],
+                            "response": fr["response"],
+                        }
+                    }],
+                })
         
         return "I apologize, but I reached the maximum number of tool calls.", memory_actions
 
