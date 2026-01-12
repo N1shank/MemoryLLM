@@ -33,34 +33,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check for existing session on mount
   useEffect(() => {
-    const token = getAuthToken();
-    const storedUser = getStoredUser();
-    
-    // Only proceed if we have both token and user
-    if (token && storedUser) {
-      // Set user optimistically for better UX (prevents redirect during verification)
-      setUser(storedUser);
-      // Verify token is still valid
-      authApi.getMe()
-        .then(user => {
+    const initializeAuth = async () => {
+      const token = getAuthToken();
+      const storedUser = getStoredUser();
+      
+      console.log('[AuthContext] Initializing auth:', { 
+        hasToken: !!token, 
+        hasStoredUser: !!storedUser,
+        tokenLength: token?.length 
+      });
+      
+      // Only proceed if we have both token and user
+      if (token && storedUser) {
+        // Set user optimistically for better UX (prevents redirect during verification)
+        setUser(storedUser);
+        console.log('[AuthContext] Set user optimistically, verifying token...');
+        
+        // Verify token is still valid
+        try {
+          const user = await authApi.getMe();
+          console.log('[AuthContext] Token verification successful', user);
           setUser(user);
           setStoredUser(user);
-        })
-        .catch((e) => {
-          // Token invalid or expired, clear everything
-          console.error('Token validation failed:', e);
+        } catch (e) {
+          // Only clear auth state if token is actually invalid (401)
+          // For other errors (network, server issues), keep user logged in
+          const isUnauthorized = e instanceof ApiClientError && e.isUnauthorized;
+          const isNetworkError = e instanceof TypeError || (e instanceof Error && e.message.includes('fetch'));
+          
+          console.log('[AuthContext] Token verification error:', {
+            isUnauthorized,
+            isNetworkError,
+            errorType: e instanceof ApiClientError ? 'ApiClientError' : e?.constructor?.name,
+            status: e instanceof ApiClientError ? e.status : undefined,
+            message: e instanceof Error ? e.message : String(e)
+          });
+          
+          if (isUnauthorized) {
+            console.error('[AuthContext] Token is invalid (401) - clearing auth state');
+            clearAuthToken();
+            setUser(null);
+          } else {
+            // For network errors, server errors, etc., keep the user logged in
+            console.warn('[AuthContext] Non-critical error during token verification - keeping user logged in');
+            // User stays logged in with stored data - don't clear anything
+          }
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        // No token or user, clear any stale data
+        console.log('[AuthContext] No token or user found');
+        if (storedUser && !token) {
+          console.log('[AuthContext] Clearing stale user data (no token)');
           clearAuthToken();
-          setUser(null);
-        })
-        .finally(() => setIsLoading(false));
-    } else {
-      // No token or user, clear any stale data
-      if (storedUser && !token) {
-        clearAuthToken();
+        }
+        setUser(null);
+        setIsLoading(false);
       }
-      setUser(null);
-      setIsLoading(false);
-    }
+    };
+    
+    initializeAuth();
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
