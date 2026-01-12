@@ -1,5 +1,6 @@
 """Authentication API endpoints."""
 
+from typing import Annotated
 from sqlalchemy import select, or_
 
 from app.core.deps import DBSession
@@ -8,7 +9,7 @@ from app.core.exceptions import ConflictError, UnauthorizedError, BadRequestErro
 from app.models.user import User
 from app.schemas.auth import UserCreate, UserLogin, Token, UserResponse
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -100,13 +101,12 @@ async def login(credentials: UserLogin, db: DBSession) -> Token:
 @router.get("/me", response_model=UserResponse)
 async def get_me(
     db: DBSession,
-    authorization: str | None = None,
+    authorization: Annotated[str | None, Header()] = None,
 ) -> UserResponse:
     """
     Get the current authenticated user's profile.
     """
-    from app.core.deps import get_current_user
-    from fastapi import Header
+    from app.core.security import decode_access_token
     
     if not authorization:
         raise UnauthorizedError("Missing authorization header")
@@ -116,7 +116,6 @@ async def get_me(
     if len(parts) != 2 or parts[0].lower() != "bearer":
         raise UnauthorizedError("Invalid authorization header format")
     
-    from app.core.security import decode_access_token
     token = parts[1]
     payload = decode_access_token(token)
     
