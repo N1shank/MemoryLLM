@@ -52,7 +52,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Verify token is still valid
         try {
           const user = await authApi.getMe();
-          console.log('[AuthContext] Token verification successful', user);
+          console.log('[AuthContext] Token verification successful', {
+            user: user.username,
+            notion_api_key_configured: user.notion_api_key_configured
+          });
           setUser(user);
           setStoredUser(user);
         } catch (e) {
@@ -154,9 +157,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const updatedUser = await authApi.getMe();
       setUser(updatedUser);
       setStoredUser(updatedUser);
+      console.log('[AuthContext] User refreshed:', { 
+        notion_api_key_configured: updatedUser.notion_api_key_configured 
+      });
     } catch (e) {
       // If refresh fails, user might be logged out
-      console.error('Failed to refresh user:', e);
+      console.error('[AuthContext] Failed to refresh user:', e);
+      // Don't clear auth state on refresh failure - might be temporary network issue
     }
   }, []);
 
