@@ -27,9 +27,9 @@ async def validate_notion_api_key(api_key: str) -> tuple[bool, str]:
     
     api_key = api_key.strip()
     
-    # Basic format validation - Notion API keys typically start with "secret_"
-    if not api_key.startswith("secret_"):
-        return False, "Invalid Notion API key format. Notion API keys should start with 'secret_'. Please check the link below for help."
+    # Basic format validation - Notion API keys can start with "secret_" (older format) or "ntn_" (newer format)
+    if not (api_key.startswith("secret_") or api_key.startswith("ntn_")):
+        return False, "Invalid Notion API key format. Notion API keys should start with 'secret_' or 'ntn_'. Please check the link below for help."
     
     # Test the key by making a request to Notion API
     try:
