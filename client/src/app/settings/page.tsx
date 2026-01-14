@@ -135,8 +135,11 @@ export default function SettingsPage() {
         await userApi.updateNotionApiKey(null);
         setNotionSuccess(true);
         setNotionApiKey('');
-        setTimeout(() => setNotionSuccess(false), 3000);
+        
+        // Refresh user data to update notion_api_key_configured status
         await refreshUser();
+        
+        setTimeout(() => setNotionSuccess(false), 5000);
       } catch (e) {
         setNotionError(e instanceof ApiClientError ? e.message : 'Failed to remove Notion integration');
       } finally {
@@ -165,10 +168,12 @@ export default function SettingsPage() {
       setNotionSuccess(true);
       setNotionApiKey(''); // Clear the field after successful save
       setShowNotionKey(false);
-      setTimeout(() => setNotionSuccess(false), 5000);
       
       // Refresh user data to update notion_api_key_configured status
       await refreshUser();
+      
+      // Keep success message visible longer
+      setTimeout(() => setNotionSuccess(false), 5000);
     } catch (e) {
       if (e instanceof ApiClientError) {
         setNotionError(e.message);
@@ -303,15 +308,38 @@ export default function SettingsPage() {
 
         {/* Notion Integration Section */}
         <section className="bg-chat-sidebar rounded-xl border border-chat-border p-6">
-          <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
-            <BookOpen size={20} className="text-chat-accent" />
-            Notion Integration
-          </h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <BookOpen size={20} className="text-chat-accent" />
+              Notion Integration
+            </h2>
+            {user?.notion_api_key_configured && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20">
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-green-400 text-sm font-medium">Connected</span>
+              </div>
+            )}
+          </div>
 
-          <p className="text-chat-muted text-sm mb-4">
+          <p className="text-chat-muted text-sm mb-6">
             Connect your Notion workspace to enable the AI to read and write to your Notion pages. 
-            Your API key is encrypted and stored securely.
+            Your API key is encrypted and stored securely in your account.
           </p>
+
+          {/* Connection Status */}
+          {user?.notion_api_key_configured && (
+            <div className="mb-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="flex items-start gap-3">
+                <Check size={18} className="text-green-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-green-400 text-sm font-medium mb-1">Notion Memory Active</p>
+                  <p className="text-chat-muted text-xs">
+                    Your Notion integration is connected and ready. The AI can now read from and write to your Notion pages.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {notionError && (
             <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center gap-2">
@@ -323,15 +351,67 @@ export default function SettingsPage() {
           {notionSuccess && (
             <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center gap-2">
               <Check size={16} className="text-green-400" />
-              <span className="text-green-400 text-sm">Notion API key validated and connected successfully!</span>
+              <span className="text-green-400 text-sm">
+                {user?.notion_api_key_configured 
+                  ? 'Notion API key updated and connected successfully!' 
+                  : 'Notion API key validated and connected successfully!'}
+              </span>
             </div>
           )}
+
+          {/* Step-by-step Guide */}
+          <div className="mb-6 p-4 rounded-lg bg-chat-input border border-chat-border">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <BookOpen size={16} className="text-chat-accent" />
+              How to get your Notion API Key
+            </h3>
+            <ol className="space-y-3 text-sm text-chat-muted">
+              <li className="flex gap-3">
+                <span className="font-semibold text-chat-accent shrink-0 w-6">1.</span>
+                <span>
+                  Go to{' '}
+                  <a
+                    href="https://www.notion.so/my-integrations"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-chat-accent hover:text-chat-accent-hover underline inline-flex items-center gap-1"
+                  >
+                    Notion Integrations
+                    <ExternalLink size={12} />
+                  </a>
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="font-semibold text-chat-accent shrink-0 w-6">2.</span>
+                <span>Click <strong>"+ New integration"</strong> or select an existing integration</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="font-semibold text-chat-accent shrink-0 w-6">3.</span>
+                <span>Give it a name (e.g., "MemoryLLM") and select your workspace</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="font-semibold text-chat-accent shrink-0 w-6">4.</span>
+                <span>Copy the <strong>"Internal Integration Token"</strong> (starts with <code className="px-1 py-0.5 rounded bg-chat-hover text-xs">secret_</code>)</span>
+              </li>
+              <li className="flex gap-3">
+                <span className="font-semibold text-chat-accent shrink-0 w-6">5.</span>
+                <span>
+                  <strong>Important:</strong> Share the pages you want the AI to access with your integration. 
+                  Click the <strong>"..."</strong> menu on any Notion page → <strong>"Add connections"</strong> → Select your integration
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="font-semibold text-chat-accent shrink-0 w-6">6.</span>
+                <span>Paste the token below and click "Connect Notion"</span>
+              </li>
+            </ol>
+          </div>
 
           <form onSubmit={handleNotionSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2 flex items-center gap-2">
                 <BookOpen size={14} className="text-chat-muted" />
-                Notion API Key
+                Notion API Key (Internal Integration Token)
               </label>
               <div className="relative">
                 <input
@@ -340,9 +420,10 @@ export default function SettingsPage() {
                   onChange={(e) => {
                     setNotionApiKey(e.target.value);
                     setNotionError('');
+                    setNotionSuccess(false);
                   }}
-                  placeholder={user?.notion_api_key_configured ? 'Enter new key to update (current key is encrypted)' : 'Enter your Notion API key'}
-                  className="w-full px-4 py-3 pr-12 rounded-lg bg-chat-input border border-chat-border focus:border-chat-accent focus:outline-none transition-colors"
+                  placeholder={user?.notion_api_key_configured ? 'Enter new key to update (current key is encrypted)' : 'secret_...'}
+                  className="w-full px-4 py-3 pr-12 rounded-lg bg-chat-input border border-chat-border focus:border-chat-accent focus:outline-none transition-colors font-mono text-sm"
                 />
                 <button
                   type="button"
@@ -354,21 +435,9 @@ export default function SettingsPage() {
               </div>
               <p className="text-xs text-chat-muted mt-2">
                 {user?.notion_api_key_configured 
-                  ? 'Enter a new key to update, or leave empty to remove your Notion integration'
-                  : 'Leave empty to remove your Notion integration'}
+                  ? 'Enter a new key to update, or leave empty and submit to remove your Notion integration'
+                  : 'Your API key will be encrypted and stored securely. Leave empty to remove integration.'}
               </p>
-            </div>
-
-            <div className="flex items-center gap-2 text-sm text-chat-muted">
-              <a
-                href="https://www.notion.so/my-integrations"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-chat-accent hover:text-chat-accent-hover transition-colors"
-              >
-                Get your Notion API key
-                <ExternalLink size={14} />
-              </a>
             </div>
 
             <button
