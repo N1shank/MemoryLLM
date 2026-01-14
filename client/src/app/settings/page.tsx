@@ -323,6 +323,7 @@ export default function SettingsPage() {
 
           <p className="text-chat-muted text-sm mb-6">
             Connect your Notion workspace to enable the AI to read and write to your Notion pages. 
+            We use <strong>Internal Integration tokens</strong> (not OAuth) - each user provides their own token.
             Your API key is encrypted and stored securely in your account.
           </p>
 
@@ -391,7 +392,7 @@ export default function SettingsPage() {
               </li>
               <li className="flex gap-3">
                 <span className="font-semibold text-chat-accent shrink-0 w-6">4.</span>
-                <span>Copy the <strong>"Internal Integration Token"</strong> (starts with <code className="px-1 py-0.5 rounded bg-chat-hover text-xs">secret_</code>)</span>
+                <span>Copy the <strong>"Internal Integration Token"</strong> (starts with <code className="px-1 py-0.5 rounded bg-chat-hover text-xs">secret_</code> or <code className="px-1 py-0.5 rounded bg-chat-hover text-xs">ntn_</code>)</span>
               </li>
               <li className="flex gap-3">
                 <span className="font-semibold text-chat-accent shrink-0 w-6">5.</span>
