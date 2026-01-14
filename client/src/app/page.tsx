@@ -878,15 +878,20 @@ export default function Home() {
 
         <div className="p-3 border-t border-chat-border space-y-2">
           {user?.notion_api_key_configured ? (
-            <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400">
-              <Brain size={16} className="text-chat-accent animate-pulse-soft" />
-              <span>Notion Memory Active</span>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              <Brain size={16} className="text-green-400" />
+              <span className="text-green-400 text-sm font-medium">Notion Memory Active</span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500">
-              <Brain size={16} className="text-gray-500" />
-              <span>Notion Memory Inactive</span>
-            </div>
+            <Link
+              href="/settings"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-chat-hover transition-colors group"
+            >
+              <Brain size={16} className="text-gray-500 group-hover:text-chat-muted" />
+              <span className="text-gray-500 text-sm group-hover:text-chat-muted">Notion Memory Inactive</span>
+              <span className="ml-auto text-xs text-chat-muted group-hover:text-chat-accent">Connect →</span>
+            </Link>
           )}
           
           <div className="flex items-center justify-between px-3 py-2">
