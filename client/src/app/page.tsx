@@ -592,6 +592,18 @@ export default function Home() {
     }
   };
 
+  const handleTogglePin = async (id: number, currentPinState: boolean) => {
+    try {
+      const updated = await conversationsApi.togglePin(id, !currentPinState);
+      setConversations(prev => 
+        prev.map(c => c.id === id ? updated : c)
+      );
+      setMenuOpenId(null);
+    } catch {
+      setError('Failed to update conversation');
+    }
+  };
+
   const handleDelete = async (id: number) => {
     try {
       await conversationsApi.delete(id);
@@ -968,9 +980,10 @@ export default function Home() {
                   <>
                     <button
                       onClick={() => loadConversation(conv.id)}
-                      className="w-full text-left px-3 py-2.5 pr-10 truncate text-sm"
+                      className="w-full text-left px-3 py-2.5 pr-10 truncate text-sm flex items-center gap-2"
                     >
-                      {conv.title}
+                      {conv.is_pinned && <Pin size={14} className="text-chat-accent shrink-0" />}
+                      <span className="truncate">{conv.title}</span>
                     </button>
                     
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -986,6 +999,22 @@ export default function Home() {
                       
                       {menuOpenId === conv.id && (
                         <div className="absolute right-0 top-full mt-1 bg-chat-sidebar border border-chat-border rounded-lg shadow-xl py-1 min-w-[120px] z-10">
+                          <button
+                            onClick={() => handleTogglePin(conv.id, conv.is_pinned)}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
+                          >
+                            {conv.is_pinned ? (
+                              <>
+                                <PinOff size={14} />
+                                Unpin
+                              </>
+                            ) : (
+                              <>
+                                <Pin size={14} />
+                                Pin
+                              </>
+                            )}
+                          </button>
                           <button
                             onClick={() => {
                               setEditingId(conv.id);
