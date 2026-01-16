@@ -6,7 +6,7 @@ import {
   Send, Plus, Brain, Menu, X, LogOut, 
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
   Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
-  Settings
+  Settings, HelpCircle, Keyboard
 } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -82,6 +82,9 @@ export default function Home() {
   const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
+  // Shortcuts help modal state
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -148,6 +151,12 @@ export default function Home() {
         e.preventDefault();
         setSearchOpen(true);
         setTimeout(() => searchInputRef.current?.focus(), 100);
+      }
+      
+      // Cmd/Ctrl + ? or Shift + ?: Open shortcuts help
+      if (((e.metaKey || e.ctrlKey) && e.key === '?') || (e.shiftKey && e.key === '?')) {
+        e.preventDefault();
+        setShortcutsOpen(true);
       }
     };
     
@@ -672,6 +681,135 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-chat-bg">
+      {/* Keyboard Shortcuts Modal */}
+      {shortcutsOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
+          onClick={() => setShortcutsOpen(false)}
+        >
+          <div 
+            className="w-full max-w-2xl bg-chat-sidebar rounded-xl border border-chat-border shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-chat-border">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center">
+                  <Keyboard size={20} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">Keyboard Shortcuts</h2>
+                  <p className="text-sm text-chat-muted">Speed up your workflow</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShortcutsOpen(false)}
+                className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+              >
+                <X size={20} className="text-chat-muted" />
+              </button>
+            </div>
+            
+            {/* Shortcuts List */}
+            <div className="p-6 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-6">
+                {/* Navigation */}
+                <div>
+                  <h3 className="text-sm font-semibold text-chat-accent mb-3 flex items-center gap-2">
+                    <Menu size={16} />
+                    Navigation
+                  </h3>
+                  <div className="space-y-2">
+                    {[
+                      { keys: ['⌘', 'K'], label: 'New chat', action: 'Create a new conversation' },
+                      { keys: ['⌘', 'B'], label: 'Toggle sidebar', action: 'Show or hide the sidebar' },
+                      { keys: ['/', 'Slash'], label: 'Focus input', action: 'Jump to message input' },
+                    ].map((shortcut, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-chat-input hover:bg-chat-hover transition-colors">
+                        <div>
+                          <div className="font-medium text-sm">{shortcut.label}</div>
+                          <div className="text-xs text-chat-muted mt-0.5">{shortcut.action}</div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {shortcut.keys.map((key, j) => (
+                            <kbd key={j} className="px-2 py-1 rounded bg-chat-sidebar border border-chat-border text-xs font-mono">
+                              {key}
+                            </kbd>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Search & Actions */}
+                <div>
+                  <h3 className="text-sm font-semibold text-chat-accent mb-3 flex items-center gap-2">
+                    <Search size={16} />
+                    Search & Actions
+                  </h3>
+                  <div className="space-y-2">
+                    {[
+                      { keys: ['⌘', 'F'], label: 'Search conversations', action: 'Open search modal' },
+                      { keys: ['⌘', '⇧', 'E'], label: 'Export conversation', action: 'Export as Markdown' },
+                    ].map((shortcut, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-chat-input hover:bg-chat-hover transition-colors">
+                        <div>
+                          <div className="font-medium text-sm">{shortcut.label}</div>
+                          <div className="text-xs text-chat-muted mt-0.5">{shortcut.action}</div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {shortcut.keys.map((key, j) => (
+                            <kbd key={j} className="px-2 py-1 rounded bg-chat-sidebar border border-chat-border text-xs font-mono">
+                              {key}
+                            </kbd>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* General */}
+                <div>
+                  <h3 className="text-sm font-semibold text-chat-accent mb-3 flex items-center gap-2">
+                    <HelpCircle size={16} />
+                    General
+                  </h3>
+                  <div className="space-y-2">
+                    {[
+                      { keys: ['Esc'], label: 'Close modals', action: 'Close any open modal or cancel editing' },
+                      { keys: ['⌘', '?'], label: 'Show shortcuts', action: 'Open this help modal' },
+                    ].map((shortcut, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-chat-input hover:bg-chat-hover transition-colors">
+                        <div>
+                          <div className="font-medium text-sm">{shortcut.label}</div>
+                          <div className="text-xs text-chat-muted mt-0.5">{shortcut.action}</div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {shortcut.keys.map((key, j) => (
+                            <kbd key={j} className="px-2 py-1 rounded bg-chat-sidebar border border-chat-border text-xs font-mono">
+                              {key}
+                            </kbd>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Footer note */}
+              <div className="mt-6 pt-4 border-t border-chat-border text-center">
+                <p className="text-xs text-chat-muted">
+                  Tip: Use <kbd className="px-1.5 py-0.5 mx-0.5 rounded bg-chat-hover text-xs">⌘</kbd> on Mac or <kbd className="px-1.5 py-0.5 mx-0.5 rounded bg-chat-hover text-xs">Ctrl</kbd> on Windows/Linux
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search modal */}
       {searchOpen && (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-start justify-center pt-[15vh]">
@@ -904,6 +1042,13 @@ export default function Home() {
               <span className="text-sm truncate max-w-[100px]">{user?.name}</span>
             </div>
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShortcutsOpen(true)}
+                className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+                title="Keyboard shortcuts"
+              >
+                <Keyboard size={18} className="text-gray-400" />
+              </button>
               <Link
                 href="/settings"
                 className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
