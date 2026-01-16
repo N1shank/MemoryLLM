@@ -423,7 +423,7 @@ export default function SettingsPage() {
                     setNotionError('');
                     setNotionSuccess(false);
                   }}
-                  placeholder={user?.notion_api_key_configured ? 'Enter new key to update (current key is encrypted)' : 'secret_...'}
+                  placeholder={user?.notion_api_key_configured ? 'Enter new key to update (current key is encrypted)' : 'secret_... or ntn_...'}
                   className="w-full px-4 py-3 pr-12 rounded-lg bg-chat-input border border-chat-border focus:border-chat-accent focus:outline-none transition-colors font-mono text-sm"
                 />
                 <button
