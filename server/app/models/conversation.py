@@ -20,6 +20,9 @@ class Conversation(Base):
     is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     share_token: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
     
+    # Pinning
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

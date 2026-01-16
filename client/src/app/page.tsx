@@ -6,7 +6,7 @@ import {
   Send, Plus, Brain, Menu, X, LogOut, 
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
   Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
-  Settings, HelpCircle, Keyboard
+  Settings, HelpCircle, Keyboard, Pin, PinOff
 } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';

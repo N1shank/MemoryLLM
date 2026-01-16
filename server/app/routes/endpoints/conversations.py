@@ -29,6 +29,7 @@ async def list_conversations(
     Returns conversations sorted by last updated (most recent first).
     """
     # Get conversations with message count
+    # Sort by pinned first, then by updated_at
     result = await db.execute(
         select(
             Conversation,
@@ -37,7 +38,7 @@ async def list_conversations(
         .outerjoin(Message)
         .where(Conversation.user_id == current_user.id)
         .group_by(Conversation.id)
-        .order_by(Conversation.updated_at.desc())
+        .order_by(Conversation.is_pinned.desc(), Conversation.updated_at.desc())
     )
     
     conversations = []
@@ -68,6 +69,7 @@ async def create_conversation(
     return ConversationResponse(
         id=conversation.id,
         title=conversation.title,
+        is_pinned=conversation.is_pinned,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         message_count=0,
@@ -120,7 +122,11 @@ async def update_conversation(
     if conversation.user_id != current_user.id:
         raise ForbiddenError("You don't have access to this conversation")
     
-    conversation.title = data.title
+    if data.title is not None:
+        conversation.title = data.title
+    if data.is_pinned is not None:
+        conversation.is_pinned = data.is_pinned
+    
     await db.commit()
     await db.refresh(conversation)
     
@@ -133,6 +139,7 @@ async def update_conversation(
     return ConversationResponse(
         id=conversation.id,
         title=conversation.title,
+        is_pinned=conversation.is_pinned,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         message_count=message_count,

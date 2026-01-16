@@ -29,13 +29,15 @@ class ConversationCreate(BaseModel):
 
 class ConversationUpdate(BaseModel):
     """Schema for updating a conversation."""
-    title: str = Field(..., min_length=1, max_length=255)
+    title: str | None = Field(None, min_length=1, max_length=255)
+    is_pinned: bool | None = None
 
 
 class ConversationResponse(BaseModel):
     """Schema for conversation response."""
     id: int
     title: str
+    is_pinned: bool = False
     created_at: datetime
     updated_at: datetime
     message_count: int = 0
