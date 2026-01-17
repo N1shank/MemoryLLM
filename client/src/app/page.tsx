@@ -7,7 +7,7 @@ import {
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
   Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
   Settings, HelpCircle, Keyboard, Pin, PinOff, ThumbsUp, ThumbsDown, Archive,
-  ChevronUp, ChevronDown, FileText, Bookmark
+  ChevronUp, ChevronDown, FileText, Bookmark, Square, CheckSquare
 } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -86,6 +86,16 @@ export default function Home() {
   }>>([]);
   const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  // Message search within conversation
+  const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [messageSearchResults, setMessageSearchResults] = useState<number[]>([]);
+  const [currentMessageSearchIndex, setCurrentMessageSearchIndex] = useState(-1);
+  const messageSearchRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  
+  // Bulk selection state
+  const [selectedConversations, setSelectedConversations] = useState<Set<number>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
   
   // Shortcuts help modal state
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -580,6 +590,53 @@ export default function Home() {
     scrollToSearchResult(prevIndex);
   };
 
+  // Message search within conversation
+  useEffect(() => {
+    if (!messageSearchQuery.trim()) {
+      setMessageSearchResults([]);
+      setCurrentMessageSearchIndex(-1);
+      return;
+    }
+    
+    const query = messageSearchQuery.toLowerCase();
+    const results: number[] = [];
+    
+    messages.forEach((msg, index) => {
+      if (msg.content.toLowerCase().includes(query)) {
+        results.push(index);
+      }
+    });
+    
+    setMessageSearchResults(results);
+    setCurrentMessageSearchIndex(results.length > 0 ? 0 : -1);
+  }, [messageSearchQuery, messages]);
+  
+  // Scroll to search result
+  useEffect(() => {
+    if (currentMessageSearchIndex >= 0 && messageSearchResults.length > 0) {
+      const messageIndex = messageSearchResults[currentMessageSearchIndex];
+      const messageId = messages[messageIndex]?.id;
+      if (messageId && messageSearchRefs.current.has(messageId)) {
+        const element = messageSearchRefs.current.get(messageId);
+        element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [currentMessageSearchIndex, messageSearchResults, messages]);
+  
+  const navigateMessageSearch = (direction: 'next' | 'prev') => {
+    if (messageSearchResults.length === 0) return;
+    
+    if (direction === 'next') {
+      setCurrentMessageSearchIndex(prev => 
+        prev < messageSearchResults.length - 1 ? prev + 1 : 0
+      );
+    } else {
+      setCurrentMessageSearchIndex(prev => 
+        prev > 0 ? prev - 1 : messageSearchResults.length - 1
+      );
+    }
+  };
+
   const formatTimestamp = (timestamp: string | undefined): string => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
@@ -723,6 +780,80 @@ export default function Home() {
       setMenuOpenId(null);
     } catch {
       setError('Failed to archive conversation');
+    }
+  };
+
+  // Bulk operations
+  const toggleConversationSelection = (id: number) => {
+    setSelectedConversations(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const selectAllConversations = () => {
+    setSelectedConversations(new Set(conversations.map(c => c.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedConversations(new Set());
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedConversations.size === 0) return;
+    
+    try {
+      await Promise.all(
+        Array.from(selectedConversations).map(id => conversationsApi.delete(id))
+      );
+      setConversations(prev => prev.filter(c => !selectedConversations.has(c.id)));
+      if (currentConversationId && selectedConversations.has(currentConversationId)) {
+        setCurrentConversationId(null);
+        setMessages([]);
+      }
+      clearSelection();
+      setBulkMode(false);
+    } catch {
+      setError('Failed to delete conversations');
+    }
+  };
+
+  const handleBulkPin = async () => {
+    if (selectedConversations.size === 0) return;
+    
+    try {
+      await Promise.all(
+        Array.from(selectedConversations).map(id => conversationsApi.togglePin(id, true))
+      );
+      await fetchConversations();
+      clearSelection();
+      setBulkMode(false);
+    } catch {
+      setError('Failed to update conversations');
+    }
+  };
+
+  const handleBulkArchive = async () => {
+    if (selectedConversations.size === 0) return;
+    
+    try {
+      await Promise.all(
+        Array.from(selectedConversations).map(id => conversationsApi.toggleArchive(id, true))
+      );
+      setConversations(prev => prev.filter(c => !selectedConversations.has(c.id)));
+      if (currentConversationId && selectedConversations.has(currentConversationId)) {
+        setCurrentConversationId(null);
+        setMessages([]);
+      }
+      clearSelection();
+      setBulkMode(false);
+    } catch {
+      setError('Failed to archive conversations');
     }
   };
 
@@ -1156,25 +1287,90 @@ export default function Home() {
         `}
       >
         <div className="p-3 border-b border-chat-border space-y-2">
-          <button
-            onClick={createNewConversation}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-chat-border hover:bg-chat-hover transition-all duration-200 group"
-          >
-            <Plus size={18} className="group-hover:rotate-90 transition-transform duration-200" />
-            <span className="font-medium">New chat</span>
-          </button>
-          
-          <button
-            onClick={() => {
-              setSearchOpen(true);
-              setTimeout(() => searchInputRef.current?.focus(), 100);
-            }}
-            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-chat-hover transition-colors text-chat-muted text-sm"
-          >
-            <Search size={16} />
-            <span>Search</span>
-            <kbd className="ml-auto text-xs px-1.5 py-0.5 rounded bg-chat-hover">⌘F</kbd>
-          </button>
+          {!bulkMode ? (
+            <>
+              <button
+                onClick={createNewConversation}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-chat-border hover:bg-chat-hover transition-all duration-200 group"
+              >
+                <Plus size={18} className="group-hover:rotate-90 transition-transform duration-200" />
+                <span className="font-medium">New chat</span>
+              </button>
+              
+              <button
+                onClick={() => {
+                  setSearchOpen(true);
+                  setTimeout(() => searchInputRef.current?.focus(), 100);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-chat-hover transition-colors text-chat-muted text-sm"
+              >
+                <Search size={16} />
+                <span>Search</span>
+                <kbd className="ml-auto text-xs px-1.5 py-0.5 rounded bg-chat-hover">⌘F</kbd>
+              </button>
+              
+              <button
+                onClick={() => setBulkMode(true)}
+                className="w-full flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-chat-hover transition-colors text-chat-muted text-sm"
+              >
+                <Square size={16} />
+                <span>Select multiple</span>
+              </button>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-2">
+                <span className="text-sm font-medium">
+                  {selectedConversations.size} selected
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={selectAllConversations}
+                    className="px-2 py-1 text-xs rounded hover:bg-chat-hover"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    onClick={() => {
+                      clearSelection();
+                      setBulkMode(false);
+                    }}
+                    className="px-2 py-1 text-xs rounded hover:bg-chat-hover"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+              {selectedConversations.size > 0 && (
+                <div className="flex gap-1 flex-wrap">
+                  <button
+                    onClick={handleBulkPin}
+                    className="px-2 py-1 text-xs rounded bg-chat-input hover:bg-chat-hover border border-chat-border"
+                    title="Pin selected"
+                  >
+                    <Pin size={12} className="inline mr-1" />
+                    Pin
+                  </button>
+                  <button
+                    onClick={handleBulkArchive}
+                    className="px-2 py-1 text-xs rounded bg-chat-input hover:bg-chat-hover border border-chat-border"
+                    title="Archive selected"
+                  >
+                    <Archive size={12} className="inline mr-1" />
+                    Archive
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    className="px-2 py-1 text-xs rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20"
+                    title="Delete selected"
+                  >
+                    <Trash2 size={12} className="inline mr-1" />
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -1220,9 +1416,26 @@ export default function Home() {
                 ) : (
                   <>
                     <button
-                      onClick={() => loadConversation(conv.id)}
-                      className="w-full text-left px-3 py-2.5 pr-10 truncate text-sm flex items-center gap-2"
+                      onClick={() => {
+                        if (bulkMode) {
+                          toggleConversationSelection(conv.id);
+                        } else {
+                          loadConversation(conv.id);
+                        }
+                      }}
+                      className={`w-full text-left px-3 py-2.5 ${bulkMode ? 'pr-10' : 'pr-10'} truncate text-sm flex items-center gap-2 ${
+                        selectedConversations.has(conv.id) ? 'bg-chat-accent/20' : ''
+                      }`}
                     >
+                      {bulkMode && (
+                        <div className="shrink-0">
+                          {selectedConversations.has(conv.id) ? (
+                            <CheckSquare size={16} className="text-chat-accent" />
+                          ) : (
+                            <Square size={16} className="text-chat-muted" />
+                          )}
+                        </div>
+                      )}
                       {conv.is_pinned && <Pin size={14} className="text-chat-accent shrink-0" />}
                       <span className="truncate">{conv.title}</span>
                     </button>
@@ -1376,29 +1589,38 @@ export default function Home() {
                 type="text"
                 value={messageSearchQuery}
                 onChange={(e) => setMessageSearchQuery(e.target.value)}
-                placeholder="Search in conversation..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.shiftKey) {
+                    e.preventDefault();
+                    navigateMessageSearch('prev');
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    navigateMessageSearch('next');
+                  }
+                }}
+                placeholder="Search in conversation... (Enter: next, Shift+Enter: prev)"
                 className="flex-1 bg-transparent focus:outline-none text-sm"
               />
               {messageSearchQuery && (
                 <div className="flex items-center gap-1 text-xs text-chat-muted">
                   <span>
                     {messageSearchResults.length > 0 
-                      ? `${currentSearchIndex + 1}/${messageSearchResults.length}`
+                      ? `${currentMessageSearchIndex + 1}/${messageSearchResults.length}`
                       : '0 results'}
                   </span>
                   {messageSearchResults.length > 0 && (
                     <>
                       <button
-                        onClick={handlePrevSearch}
+                        onClick={() => navigateMessageSearch('prev')}
                         className="p-0.5 hover:bg-chat-hover rounded"
-                        title="Previous"
+                        title="Previous (Shift+Enter)"
                       >
                         <ChevronUp size={12} />
                       </button>
                       <button
-                        onClick={handleNextSearch}
+                        onClick={() => navigateMessageSearch('next')}
                         className="p-0.5 hover:bg-chat-hover rounded"
-                        title="Next"
+                        title="Next (Enter)"
                       >
                         <ChevronDown size={12} />
                       </button>
@@ -1511,11 +1733,16 @@ export default function Home() {
             <div className="max-w-3xl mx-auto px-4 py-6">
               {messages.map((message, index) => {
                 const isSearchResult = messageSearchResults.includes(index);
-                const isCurrentSearchResult = currentSearchIndex >= 0 && messageSearchResults[currentSearchIndex] === index;
+                const isCurrentSearchResult = currentMessageSearchIndex >= 0 && messageSearchResults[currentMessageSearchIndex] === index;
                 
                 return (
                 <div
                   key={message.id}
+                  ref={(el) => {
+                    if (el && typeof message.id === 'number') {
+                      messageSearchRefs.current.set(message.id, el);
+                    }
+                  }}
                   data-message-index={index}
                   className={`group mb-6 animate-fade-in ${message.role === 'user' ? 'flex justify-end' : ''} ${
                     isCurrentSearchResult ? 'ring-2 ring-chat-accent rounded-lg p-2 -m-2' : ''
