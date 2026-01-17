@@ -6,7 +6,7 @@ import {
   Send, Plus, Brain, Menu, X, LogOut, 
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
   Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
-  Settings, HelpCircle, Keyboard, Pin, PinOff
+  Settings, HelpCircle, Keyboard, Pin, PinOff, ThumbsUp, ThumbsDown
 } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -36,6 +36,7 @@ interface LocalMessage {
   role: 'user' | 'assistant';
   content: string;
   memory_context: string | null;
+  feedback?: 'thumbs_up' | 'thumbs_down' | null;
   isStreaming?: boolean;
   attachments?: Attachment[];
 }
@@ -210,6 +211,7 @@ export default function Home() {
       const conv = await conversationsApi.get(id);
       setMessages(conv.messages.map(m => ({
         ...m,
+        feedback: m.feedback || null,
         isStreaming: false,
       })));
     } catch (e) {
@@ -468,17 +470,41 @@ export default function Home() {
     setEditMessageContent('');
   };
 
+  const handleFeedback = async (messageId: number | string, feedback: 'thumbs_up' | 'thumbs_down' | null) => {
+    if (typeof messageId !== 'number') return;
+    
+    try {
+      const updated = await chatApi.updateFeedback(messageId, feedback);
+      setMessages(prev => 
+        prev.map(m => m.id === messageId ? { ...m, feedback: updated.feedback } : m)
+      );
+    } catch {
+      setError('Failed to update feedback');
+    }
+  };
+
   const regenerateResponse = async (messageIndex: number) => {
-    if (isLoading) return;
+    if (isLoading || !currentConversationId) return;
     
-    // Find the user message before this assistant message
-    const userMessageIndex = messageIndex - 1;
-    if (userMessageIndex < 0 || messages[userMessageIndex].role !== 'user') return;
+    setIsLoading(true);
+    setError(null);
     
-    const userMessage = messages[userMessageIndex];
-    
-    // Keep messages up to and including the user message
-    const messagesBeforeRegenerate = messages.slice(0, userMessageIndex);
+    try {
+      const response = await chatApi.regenerate(currentConversationId);
+      
+      // Reload conversation to get updated messages
+      await loadConversation(currentConversationId);
+    } catch (e) {
+      const errorMessage = e instanceof ApiClientError 
+        ? e.message 
+        : e instanceof Error 
+          ? e.message 
+          : 'Failed to regenerate response';
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
     
     // Re-send the user message
     await sendMessageWithContent(userMessage.content, currentConversationId, messagesBeforeRegenerate);
@@ -1325,7 +1351,30 @@ export default function Home() {
                         </div>
                         {/* Action buttons for assistant messages */}
                         {!message.isStreaming && message.content && (
-                          <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                          <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                            <button
+                              onClick={() => handleFeedback(message.id, message.feedback === 'thumbs_up' ? null : 'thumbs_up')}
+                              className={`p-1.5 rounded-md hover:bg-chat-hover transition-colors ${
+                                message.feedback === 'thumbs_up' 
+                                  ? 'text-green-400 bg-green-400/10' 
+                                  : 'text-gray-400 hover:text-green-400'
+                              }`}
+                              title="Thumbs up"
+                            >
+                              <ThumbsUp size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleFeedback(message.id, message.feedback === 'thumbs_down' ? null : 'thumbs_down')}
+                              className={`p-1.5 rounded-md hover:bg-chat-hover transition-colors ${
+                                message.feedback === 'thumbs_down' 
+                                  ? 'text-red-400 bg-red-400/10' 
+                                  : 'text-gray-400 hover:text-red-400'
+                              }`}
+                              title="Thumbs down"
+                            >
+                              <ThumbsDown size={14} />
+                            </button>
+                            <div className="w-px h-4 bg-chat-border mx-1" />
                             <button
                               onClick={() => copyMessage(message.content, message.id)}
                               className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors"

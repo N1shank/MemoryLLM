@@ -60,6 +60,7 @@ class Message(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False)  # 'user' or 'assistant'
     content: Mapped[str] = mapped_column(Text, nullable=False)
     memory_context: Mapped[str | None] = mapped_column(Text, nullable=True)
+    feedback: Mapped[str | None] = mapped_column(String(20), nullable=True)  # 'thumbs_up' or 'thumbs_down'
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

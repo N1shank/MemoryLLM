@@ -13,7 +13,13 @@ from app.core.database import async_session
 from app.core.deps import DBSession, CurrentUser
 from app.core.exceptions import NotFoundError, ForbiddenError, ServiceUnavailableError
 from app.models.conversation import Conversation, Message
-from app.schemas.chat import ChatRequest, ChatResponse
+from app.schemas.chat import (
+    ChatRequest, 
+    ChatResponse, 
+    MessageFeedbackUpdate, 
+    RegenerateRequest,
+    MessageResponse,
+)
 from app.services.gemini_agent import gemini_agent
 
 logger = logging.getLogger(__name__)
@@ -217,6 +223,119 @@ async def chat_stream(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+@router.patch("/messages/{message_id}/feedback", response_model=MessageResponse)
+async def update_message_feedback(
+    message_id: int,
+    feedback_data: MessageFeedbackUpdate,
+    db: DBSession,
+    current_user: CurrentUser,
+) -> MessageResponse:
+    """
+    Update feedback for a message (thumbs up/down).
+    """
+    result = await db.execute(
+        select(Message)
+        .join(Conversation)
+        .where(Message.id == message_id)
+    )
+    message = result.scalar_one_or_none()
+    
+    if not message:
+        raise NotFoundError("Message not found")
+    
+    if message.conversation.user_id != current_user.id:
+        raise ForbiddenError("You don't have access to this message")
+    
+    message.feedback = feedback_data.feedback
+    await db.commit()
+    await db.refresh(message)
+    
+    return MessageResponse.model_validate(message)
+
+
+@router.post("/regenerate", response_model=ChatResponse)
+async def regenerate_response(
+    request: RegenerateRequest,
+    db: DBSession,
+    current_user: CurrentUser,
+) -> ChatResponse:
+    """
+    Regenerate the last AI response in a conversation.
+    """
+    # Get conversation with messages
+    result = await db.execute(
+        select(Conversation)
+        .options(selectinload(Conversation.messages))
+        .where(Conversation.id == request.conversation_id)
+    )
+    conversation = result.scalar_one_or_none()
+    
+    if not conversation:
+        raise NotFoundError("Conversation not found")
+    
+    if conversation.user_id != current_user.id:
+        raise ForbiddenError("You don't have access to this conversation")
+    
+    if not conversation.messages:
+        raise NotFoundError("No messages in conversation")
+    
+    # Find the last user message and its corresponding assistant message
+    messages = sorted(conversation.messages, key=lambda m: m.created_at)
+    last_user_msg = None
+    last_assistant_msg = None
+    
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].role == "assistant" and not last_assistant_msg:
+            last_assistant_msg = messages[i]
+        elif messages[i].role == "user" and not last_user_msg:
+            last_user_msg = messages[i]
+            break
+    
+    if not last_user_msg or not last_assistant_msg:
+        raise NotFoundError("Cannot regenerate: need both user and assistant messages")
+    
+    # Delete the last assistant message
+    await db.delete(last_assistant_msg)
+    await db.flush()
+    
+    # Build conversation history up to (but not including) the last user message
+    history = []
+    for msg in messages:
+        if msg.id == last_user_msg.id:
+            break
+        history.append({"role": msg.role, "content": msg.content})
+    
+    # Regenerate AI response
+    try:
+        response_text, memory_context = await gemini_agent.chat(
+            message=last_user_msg.content,
+            conversation_history=history,
+            notion_api_key=current_user.notion_api_key,
+        )
+    except Exception as e:
+        logger.error(f"Gemini agent error during regenerate: {e}")
+        raise ServiceUnavailableError(f"AI service error: {str(e)}")
+    
+    # Save new assistant message
+    new_assistant_message = Message(
+        conversation_id=conversation.id,
+        role="assistant",
+        content=response_text,
+        memory_context=memory_context,
+    )
+    db.add(new_assistant_message)
+    
+    await db.commit()
+    await db.refresh(new_assistant_message)
+    
+    return ChatResponse(
+        message=response_text,
+        message_id=new_assistant_message.id,
+        conversation_id=conversation.id,
+        memory_context=memory_context,
     )
 
 

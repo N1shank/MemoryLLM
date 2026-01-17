@@ -16,6 +16,7 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     memory_context: str | None = None
+    feedback: str | None = None  # 'thumbs_up' or 'thumbs_down'
     created_at: datetime
 
     class Config:
@@ -70,3 +71,13 @@ class ChatResponse(BaseModel):
     message_id: int
     conversation_id: int
     memory_context: str | None = None
+
+
+class MessageFeedbackUpdate(BaseModel):
+    """Schema for updating message feedback."""
+    feedback: str | None = Field(None, pattern="^(thumbs_up|thumbs_down)$")
+
+
+class RegenerateRequest(BaseModel):
+    """Schema for regenerating the last AI response."""
+    conversation_id: int
