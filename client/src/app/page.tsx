@@ -944,6 +944,125 @@ export default function Home() {
         </div>
       )}
 
+      {/* Templates Modal */}
+      {templatesOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
+          onClick={() => setTemplatesOpen(false)}
+        >
+          <div 
+            className="w-full max-w-2xl bg-chat-sidebar rounded-xl border border-chat-border shadow-2xl overflow-hidden max-h-[80vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-chat-border">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center">
+                  <FileText size={20} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">Templates</h2>
+                  <p className="text-sm text-chat-muted">Save and reuse common prompts</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setTemplatesOpen(false)}
+                className="p-2 hover:bg-chat-hover rounded-lg transition-colors"
+              >
+                <X size={20} className="text-chat-muted" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="mb-6 p-4 rounded-lg bg-chat-input border border-chat-border">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Plus size={16} />
+                  Save Template
+                </h3>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={templateTitle}
+                    onChange={(e) => setTemplateTitle(e.target.value)}
+                    placeholder="Template name..."
+                    className="w-full px-3 py-2 rounded-lg bg-chat-sidebar border border-chat-border focus:border-chat-accent focus:outline-none text-sm"
+                  />
+                  <div className="relative">
+                    <textarea
+                      value={templateContent}
+                      onChange={(e) => setTemplateContent(e.target.value)}
+                      placeholder="Template content..."
+                      rows={3}
+                      className="w-full px-3 py-2 rounded-lg bg-chat-sidebar border border-chat-border focus:border-chat-accent focus:outline-none text-sm resize-none"
+                    />
+                    {input.trim() && !templateContent && (
+                      <button
+                        onClick={() => setTemplateContent(input)}
+                        className="absolute bottom-2 right-2 px-2 py-1 text-xs rounded bg-chat-accent/20 hover:bg-chat-accent/30 text-chat-accent transition-colors"
+                      >
+                        Use current input
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleSaveTemplate}
+                    disabled={!templateTitle.trim() || !templateContent.trim() || savingTemplate}
+                    className="px-4 py-2 rounded-lg bg-chat-accent hover:bg-chat-accent-hover disabled:opacity-50 text-sm font-medium transition-colors"
+                  >
+                    {savingTemplate ? 'Saving...' : 'Save Template'}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Bookmark size={16} />
+                  Saved Templates
+                </h3>
+                {isLoadingTemplates ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 size={24} className="animate-spin text-chat-muted" />
+                  </div>
+                ) : templates.length === 0 ? (
+                  <p className="text-center text-chat-muted text-sm py-8">No templates yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {templates.map((template) => (
+                      <div
+                        key={template.id}
+                        className="p-3 rounded-lg bg-chat-input border border-chat-border hover:border-chat-accent/30 transition-colors group"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-sm mb-1">{template.title}</h4>
+                            <p className="text-xs text-chat-muted line-clamp-2">{template.content}</p>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleUseTemplate(template)}
+                              className="p-1.5 rounded-md hover:bg-chat-hover text-chat-accent transition-colors"
+                              title="Use template"
+                            >
+                              <Send size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTemplate(template.id)}
+                              className="p-1.5 rounded-md hover:bg-red-500/10 text-red-400 transition-colors"
+                              title="Delete template"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search modal */}
       {searchOpen && (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-start justify-center pt-[15vh]">
