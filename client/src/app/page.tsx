@@ -7,7 +7,7 @@ import {
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
   Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
   Settings, HelpCircle, Keyboard, Pin, PinOff, ThumbsUp, ThumbsDown, Archive,
-  ChevronUp, ChevronDown
+  ChevronUp, ChevronDown, FileText, Bookmark
 } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -24,6 +24,8 @@ import {
   Conversation, 
   ApiClientError,
   UploadedFile,
+  templatesApi,
+  Template,
 } from '@/lib/api';
 
 interface Attachment {
@@ -92,6 +94,14 @@ export default function Home() {
   const [messageSearchQuery, setMessageSearchQuery] = useState('');
   const [messageSearchResults, setMessageSearchResults] = useState<number[]>([]);
   const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
+  
+  // Templates
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateTitle, setTemplateTitle] = useState('');
+  const [templateContent, setTemplateContent] = useState('');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1587,6 +1597,13 @@ export default function Home() {
                   onFileUploaded={(file) => setPendingAttachments(prev => [...prev, file])}
                   disabled={isLoading}
                 />
+                <button
+                  onClick={() => setTemplatesOpen(true)}
+                  className="p-2.5 hover:bg-chat-hover rounded-lg transition-colors"
+                  title="Templates"
+                >
+                  <FileText size={18} className="text-chat-muted" />
+                </button>
               </div>
               <textarea
                 ref={textareaRef}
