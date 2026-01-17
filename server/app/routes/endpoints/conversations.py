@@ -36,7 +36,10 @@ async def list_conversations(
             func.count(Message.id).label("message_count"),
         )
         .outerjoin(Message)
-        .where(Conversation.user_id == current_user.id)
+        .where(
+            Conversation.user_id == current_user.id,
+            Conversation.is_archived == False
+        )
         .group_by(Conversation.id)
         .order_by(Conversation.is_pinned.desc(), Conversation.updated_at.desc())
     )
@@ -70,6 +73,7 @@ async def create_conversation(
         id=conversation.id,
         title=conversation.title,
         is_pinned=conversation.is_pinned,
+        is_archived=conversation.is_archived,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         message_count=0,
@@ -126,6 +130,8 @@ async def update_conversation(
         conversation.title = data.title
     if data.is_pinned is not None:
         conversation.is_pinned = data.is_pinned
+    if data.is_archived is not None:
+        conversation.is_archived = data.is_archived
     
     await db.commit()
     await db.refresh(conversation)
@@ -140,6 +146,7 @@ async def update_conversation(
         id=conversation.id,
         title=conversation.title,
         is_pinned=conversation.is_pinned,
+        is_archived=conversation.is_archived,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         message_count=message_count,

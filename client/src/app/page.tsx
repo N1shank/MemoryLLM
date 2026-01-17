@@ -6,7 +6,7 @@ import {
   Send, Plus, Brain, Menu, X, LogOut, 
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
   Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
-  Settings, HelpCircle, Keyboard, Pin, PinOff, ThumbsUp, ThumbsDown
+  Settings, HelpCircle, Keyboard, Pin, PinOff, ThumbsUp, ThumbsDown, Archive
 } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -37,6 +37,7 @@ interface LocalMessage {
   content: string;
   memory_context: string | null;
   feedback?: 'thumbs_up' | 'thumbs_down' | null;
+  created_at?: string;
   isStreaming?: boolean;
   attachments?: Attachment[];
 }
@@ -212,6 +213,7 @@ export default function Home() {
       setMessages(conv.messages.map(m => ({
         ...m,
         feedback: m.feedback || null,
+        created_at: m.created_at,
         isStreaming: false,
       })));
     } catch (e) {
@@ -520,6 +522,28 @@ export default function Home() {
     }
   };
 
+  const formatTimestamp = (timestamp: string | undefined): string => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    // Show date for older messages
+    const isToday = date.toDateString() === now.toDateString();
+    if (isToday) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
   const exportConversation = (format: 'json' | 'markdown') => {
     if (messages.length === 0) return;
     
@@ -627,6 +651,20 @@ export default function Home() {
       setMenuOpenId(null);
     } catch {
       setError('Failed to update conversation');
+    }
+  };
+
+  const handleToggleArchive = async (id: number, currentArchiveState: boolean) => {
+    try {
+      await conversationsApi.toggleArchive(id, !currentArchiveState);
+      setConversations(prev => prev.filter(c => c.id !== id));
+      if (currentConversationId === id) {
+        setCurrentConversationId(null);
+        setMessages([]);
+      }
+      setMenuOpenId(null);
+    } catch {
+      setError('Failed to archive conversation');
     }
   };
 
@@ -1053,6 +1091,13 @@ export default function Home() {
                             Rename
                           </button>
                           <button
+                            onClick={() => handleToggleArchive(conv.id, conv.is_archived)}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
+                          >
+                            <Archive size={14} />
+                            Archive
+                          </button>
+                          <button
                             onClick={() => handleDelete(conv.id)}
                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-500/10 text-red-400 text-sm"
                           >
@@ -1291,6 +1336,11 @@ export default function Home() {
                             {message.content}
                           </div>
                           {/* Edit button for user messages */}
+                          {message.created_at && (
+                            <div className="text-xs text-chat-muted mt-1 text-right">
+                              {formatTimestamp(message.created_at)}
+                            </div>
+                          )}
                           <div className="absolute -bottom-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                             <button
                               onClick={() => handleEditMessage(message)}
@@ -1349,6 +1399,11 @@ export default function Home() {
                             <span className="typing-cursor" />
                           )}
                         </div>
+                        {message.created_at && (
+                          <div className="text-xs text-chat-muted mt-1">
+                            {formatTimestamp(message.created_at)}
+                          </div>
+                        )}
                         {/* Action buttons for assistant messages */}
                         {!message.isStreaming && message.content && (
                           <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">

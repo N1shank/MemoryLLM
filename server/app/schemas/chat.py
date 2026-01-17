@@ -32,6 +32,7 @@ class ConversationUpdate(BaseModel):
     """Schema for updating a conversation."""
     title: str | None = Field(None, min_length=1, max_length=255)
     is_pinned: bool | None = None
+    is_archived: bool | None = None
 
 
 class ConversationResponse(BaseModel):
@@ -39,6 +40,7 @@ class ConversationResponse(BaseModel):
     id: int
     title: str
     is_pinned: bool = False
+    is_archived: bool = False
     created_at: datetime
     updated_at: datetime
     message_count: int = 0
