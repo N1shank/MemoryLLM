@@ -6,7 +6,8 @@ import {
   Send, Plus, Brain, Menu, X, LogOut, 
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
   Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
-  Settings, HelpCircle, Keyboard, Pin, PinOff, ThumbsUp, ThumbsDown, Archive
+  Settings, HelpCircle, Keyboard, Pin, PinOff, ThumbsUp, ThumbsDown, Archive,
+  ChevronUp, ChevronDown
 } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -86,6 +87,11 @@ export default function Home() {
   
   // Shortcuts help modal state
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  
+  // Message search within conversation
+  const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [messageSearchResults, setMessageSearchResults] = useState<number[]>([]);
+  const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -520,6 +526,48 @@ export default function Home() {
     } catch {
       setError('Failed to copy to clipboard');
     }
+  };
+
+  // Message search within conversation
+  useEffect(() => {
+    if (!messageSearchQuery.trim()) {
+      setMessageSearchResults([]);
+      setCurrentSearchIndex(-1);
+      return;
+    }
+    
+    const query = messageSearchQuery.toLowerCase();
+    const results: number[] = [];
+    
+    messages.forEach((msg, index) => {
+      if (msg.content.toLowerCase().includes(query)) {
+        results.push(index);
+      }
+    });
+    
+    setMessageSearchResults(results);
+    setCurrentSearchIndex(results.length > 0 ? 0 : -1);
+  }, [messageSearchQuery, messages]);
+
+  const scrollToSearchResult = (index: number) => {
+    if (index < 0 || index >= messageSearchResults.length) return;
+    const messageIndex = messageSearchResults[index];
+    const messageElement = document.querySelector(`[data-message-index="${messageIndex}"]`);
+    messageElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const handleNextSearch = () => {
+    if (messageSearchResults.length === 0) return;
+    const nextIndex = (currentSearchIndex + 1) % messageSearchResults.length;
+    setCurrentSearchIndex(nextIndex);
+    scrollToSearchResult(nextIndex);
+  };
+
+  const handlePrevSearch = () => {
+    if (messageSearchResults.length === 0) return;
+    const prevIndex = currentSearchIndex <= 0 ? messageSearchResults.length - 1 : currentSearchIndex - 1;
+    setCurrentSearchIndex(prevIndex);
+    scrollToSearchResult(prevIndex);
   };
 
   const formatTimestamp = (timestamp: string | undefined): string => {
@@ -1191,6 +1239,54 @@ export default function Home() {
             <span className="font-semibold">MemoryLLM</span>
           </div>
           
+          {/* Message search within conversation */}
+          {messages.length > 0 && (
+            <div className="flex-1 max-w-md mx-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-chat-input border border-chat-border focus-within:border-chat-accent/50">
+              <Search size={16} className="text-chat-muted shrink-0" />
+              <input
+                type="text"
+                value={messageSearchQuery}
+                onChange={(e) => setMessageSearchQuery(e.target.value)}
+                placeholder="Search in conversation..."
+                className="flex-1 bg-transparent focus:outline-none text-sm"
+              />
+              {messageSearchQuery && (
+                <div className="flex items-center gap-1 text-xs text-chat-muted">
+                  <span>
+                    {messageSearchResults.length > 0 
+                      ? `${currentSearchIndex + 1}/${messageSearchResults.length}`
+                      : '0 results'}
+                  </span>
+                  {messageSearchResults.length > 0 && (
+                    <>
+                      <button
+                        onClick={handlePrevSearch}
+                        className="p-0.5 hover:bg-chat-hover rounded"
+                        title="Previous"
+                      >
+                        <ChevronUp size={12} />
+                      </button>
+                      <button
+                        onClick={handleNextSearch}
+                        className="p-0.5 hover:bg-chat-hover rounded"
+                        title="Next"
+                      >
+                        <ChevronDown size={12} />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setMessageSearchQuery('')}
+                    className="p-0.5 hover:bg-chat-hover rounded ml-1"
+                    title="Clear"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          
           <div className="ml-auto flex items-center gap-1">
             {/* Share button */}
             {currentConversationId && messages.length > 0 && (
@@ -1284,10 +1380,17 @@ export default function Home() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6">
-              {messages.map((message, index) => (
+              {messages.map((message, index) => {
+                const isSearchResult = messageSearchResults.includes(index);
+                const isCurrentSearchResult = currentSearchIndex >= 0 && messageSearchResults[currentSearchIndex] === index;
+                
+                return (
                 <div
                   key={message.id}
-                  className={`group mb-6 animate-fade-in ${message.role === 'user' ? 'flex justify-end' : ''}`}
+                  data-message-index={index}
+                  className={`group mb-6 animate-fade-in ${message.role === 'user' ? 'flex justify-end' : ''} ${
+                    isCurrentSearchResult ? 'ring-2 ring-chat-accent rounded-lg p-2 -m-2' : ''
+                  } ${isSearchResult && messageSearchQuery ? 'opacity-100' : messageSearchQuery ? 'opacity-40' : ''}`}
                 >
                   {message.role === 'user' ? (
                     <div className="max-w-[85%]">
@@ -1455,7 +1558,8 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
           )}
