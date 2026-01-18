@@ -19,6 +19,7 @@ from app.schemas.chat import (
     MessageFeedbackUpdate, 
     RegenerateRequest,
     MessageResponse,
+    MessageEdit,
 )
 from app.services.gemini_agent import gemini_agent
 
@@ -337,6 +338,36 @@ async def regenerate_response(
         conversation_id=conversation.id,
         memory_context=memory_context,
     )
+
+
+@router.patch("/messages/{message_id}", response_model=MessageResponse)
+async def edit_message(
+    message_id: int,
+    edit_data: MessageEdit,
+    db: DBSession,
+    current_user: CurrentUser,
+) -> MessageResponse:
+    """
+    Edit a message (both user and assistant messages can be edited).
+    """
+    result = await db.execute(
+        select(Message)
+        .join(Conversation)
+        .where(Message.id == message_id)
+    )
+    message = result.scalar_one_or_none()
+    
+    if not message:
+        raise NotFoundError("Message not found")
+    
+    if message.conversation.user_id != current_user.id:
+        raise ForbiddenError("You don't have access to this message")
+    
+    message.content = edit_data.content
+    await db.commit()
+    await db.refresh(message)
+    
+    return MessageResponse.model_validate(message)
 
 
 @router.get("/health")

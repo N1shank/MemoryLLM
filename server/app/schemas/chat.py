@@ -33,6 +33,8 @@ class ConversationUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=255)
     is_pinned: bool | None = None
     is_archived: bool | None = None
+    folder_id: int | None = None
+    tags: list[str] | None = None
 
 
 class ConversationResponse(BaseModel):
@@ -41,6 +43,8 @@ class ConversationResponse(BaseModel):
     title: str
     is_pinned: bool = False
     is_archived: bool = False
+    folder_id: int | None = None
+    tags: list[str] = []
     created_at: datetime
     updated_at: datetime
     message_count: int = 0
@@ -83,3 +87,8 @@ class MessageFeedbackUpdate(BaseModel):
 class RegenerateRequest(BaseModel):
     """Schema for regenerating the last AI response."""
     conversation_id: int
+
+
+class MessageEdit(BaseModel):
+    """Schema for editing a message."""
+    content: str = Field(..., min_length=1)

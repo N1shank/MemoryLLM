@@ -10,6 +10,7 @@ class UserResponse(BaseModel):
     email: str
     username: str
     notion_api_key_configured: bool = False
+    notion_pages: list[dict] = []
 
     class Config:
         from_attributes = True
@@ -31,4 +32,9 @@ class PasswordChange(BaseModel):
 class NotionApiKeyUpdate(BaseModel):
     """Schema for updating Notion API key."""
     api_key: str | None = Field(None, description="Notion API key. Set to empty string to remove.")
+
+
+class NotionPagesUpdate(BaseModel):
+    """Schema for updating selected Notion pages."""
+    pages: list[dict] = Field(default_factory=list, description="List of selected Notion pages with id, title, etc.")
 

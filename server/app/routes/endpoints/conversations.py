@@ -47,8 +47,17 @@ async def list_conversations(
     conversations = []
     for row in result:
         conv = row[0]
-        conv.message_count = row[1]
-        conversations.append(ConversationResponse.model_validate(conv))
+        conversations.append(ConversationResponse(
+            id=conv.id,
+            title=conv.title,
+            is_pinned=conv.is_pinned,
+            is_archived=conv.is_archived,
+            folder_id=conv.folder_id,
+            tags=conv.tags or [],
+            created_at=conv.created_at,
+            updated_at=conv.updated_at,
+            message_count=row[1],
+        ))
     
     return conversations
 
@@ -74,6 +83,8 @@ async def create_conversation(
         title=conversation.title,
         is_pinned=conversation.is_pinned,
         is_archived=conversation.is_archived,
+        folder_id=conversation.folder_id,
+        tags=conversation.tags or [],
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         message_count=0,
@@ -132,6 +143,22 @@ async def update_conversation(
         conversation.is_pinned = data.is_pinned
     if data.is_archived is not None:
         conversation.is_archived = data.is_archived
+    if data.folder_id is not None:
+        # Validate folder belongs to user if provided
+        if data.folder_id:
+            from app.models.folder import Folder
+            folder_result = await db.execute(
+                select(Folder).where(
+                    Folder.id == data.folder_id,
+                    Folder.user_id == current_user.id,
+                )
+            )
+            folder = folder_result.scalar_one_or_none()
+            if not folder:
+                raise NotFoundError("Folder not found")
+        conversation.folder_id = data.folder_id
+    if data.tags is not None:
+        conversation.tags = data.tags
     
     await db.commit()
     await db.refresh(conversation)
@@ -147,6 +174,8 @@ async def update_conversation(
         title=conversation.title,
         is_pinned=conversation.is_pinned,
         is_archived=conversation.is_archived,
+        folder_id=conversation.folder_id,
+        tags=conversation.tags or [],
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         message_count=message_count,

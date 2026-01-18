@@ -9,6 +9,8 @@ from app.routes.endpoints.users import router as users_router
 from app.routes.endpoints.files import router as files_router
 from app.routes.endpoints.share import router as share_router
 from app.routes.endpoints.templates import router as templates_router
+from app.routes.endpoints.folders import router as folders_router
+from app.routes.endpoints.drafts import router as drafts_router
 
 router = APIRouter()
 

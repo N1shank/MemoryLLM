@@ -1,7 +1,7 @@
 """User database model."""
 
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, Text
+from sqlalchemy import String, DateTime, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -18,6 +18,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     notion_api_key: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    notion_pages: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True, default=list)  # Selected Notion pages
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -36,6 +37,16 @@ class User(Base):
     )
     templates: Mapped[list["ConversationTemplate"]] = relationship(
         "ConversationTemplate",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    folders: Mapped[list["Folder"]] = relationship(
+        "Folder",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    drafts: Mapped[list["Draft"]] = relationship(
+        "Draft",
         back_populates="user",
         cascade="all, delete-orphan",
     )

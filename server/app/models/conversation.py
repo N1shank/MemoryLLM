@@ -1,7 +1,7 @@
 """Conversation and Message database models."""
 
 from datetime import datetime, timezone
-from sqlalchemy import String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import String, Text, DateTime, ForeignKey, Boolean, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -26,6 +26,12 @@ class Conversation(Base):
     # Archiving
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     
+    # Folder organization
+    folder_id: Mapped[int | None] = mapped_column(ForeignKey("folders.id"), nullable=True, index=True)
+    
+    # Tags (stored as JSON array for simplicity)
+    tags: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)
+    
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -38,12 +44,14 @@ class Conversation(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="conversations")
+    folder: Mapped["Folder | None"] = relationship("Folder", back_populates="conversations")
     messages: Mapped[list["Message"]] = relationship(
         "Message",
         back_populates="conversation",
         cascade="all, delete-orphan",
         order_by="Message.created_at",
     )
+    draft: Mapped["Draft | None"] = relationship("Draft", back_populates="conversation", uselist=False)
 
     def __repr__(self) -> str:
         return f"<Conversation {self.id}: {self.title}>"

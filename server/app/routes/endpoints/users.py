@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.core.deps import DBSession, CurrentUser
 from app.core.security import verify_password, get_password_hash, encrypt_api_key
 from app.core.exceptions import BadRequestError
-from app.schemas.user import UserUpdate, PasswordChange, UserResponse, NotionApiKeyUpdate
+from app.schemas.user import UserUpdate, PasswordChange, UserResponse, NotionApiKeyUpdate, NotionPagesUpdate, NotionPagesUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,7 @@ async def get_profile(current_user: CurrentUser) -> UserResponse:
         email=current_user.email,
         username=current_user.username,
         notion_api_key_configured=bool(current_user.notion_api_key),
+        notion_pages=current_user.notion_pages or [],
     )
 
 
@@ -115,6 +116,7 @@ async def update_profile(
         email=current_user.email,
         username=current_user.username,
         notion_api_key_configured=bool(current_user.notion_api_key),
+        notion_pages=current_user.notion_pages or [],
     )
 
 
@@ -184,6 +186,22 @@ async def validate_notion_api_key_endpoint(
     return {
         "valid": is_valid,
         "message": message
+    }
+
+
+@router.post("/me/notion-pages")
+async def update_notion_pages(
+    data: NotionPagesUpdate,
+    db: DBSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Update the selected Notion pages for the current user."""
+    current_user.notion_pages = data.pages
+    await db.commit()
+    
+    return {
+        "message": "Notion pages updated successfully",
+        "pages": data.pages
     }
 
 
