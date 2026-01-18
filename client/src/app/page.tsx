@@ -7,7 +7,7 @@ import {
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
   Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
   Settings, HelpCircle, Keyboard, Pin, PinOff, ThumbsUp, ThumbsDown, Archive,
-  ChevronUp, ChevronDown, FileText, Bookmark, Square, CheckSquare
+  ChevronUp, ChevronDown, FileText, Bookmark, Square, CheckSquare, MessageSquare
 } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -56,6 +56,7 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingConversations, setIsFetchingConversations] = useState(true);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,11 +100,6 @@ export default function Home() {
   
   // Shortcuts help modal state
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  
-  // Message search within conversation
-  const [messageSearchQuery, setMessageSearchQuery] = useState('');
-  const [messageSearchResults, setMessageSearchResults] = useState<number[]>([]);
-  const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
   
   // Templates
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -233,6 +229,8 @@ export default function Home() {
   const loadConversation = async (id: number) => {
     setCurrentConversationId(id);
     setError(null);
+    setIsLoadingMessages(true);
+    setMessages([]);
     
     try {
       const conv = await conversationsApi.get(id);
@@ -254,6 +252,8 @@ export default function Home() {
           setError(e.message);
         }
       }
+    } finally {
+      setIsLoadingMessages(false);
     }
   };
 
@@ -546,48 +546,6 @@ export default function Home() {
     } catch {
       setError('Failed to copy to clipboard');
     }
-  };
-
-  // Message search within conversation
-  useEffect(() => {
-    if (!messageSearchQuery.trim()) {
-      setMessageSearchResults([]);
-      setCurrentSearchIndex(-1);
-      return;
-    }
-    
-    const query = messageSearchQuery.toLowerCase();
-    const results: number[] = [];
-    
-    messages.forEach((msg, index) => {
-      if (msg.content.toLowerCase().includes(query)) {
-        results.push(index);
-      }
-    });
-    
-    setMessageSearchResults(results);
-    setCurrentSearchIndex(results.length > 0 ? 0 : -1);
-  }, [messageSearchQuery, messages]);
-
-  const scrollToSearchResult = (index: number) => {
-    if (index < 0 || index >= messageSearchResults.length) return;
-    const messageIndex = messageSearchResults[index];
-    const messageElement = document.querySelector(`[data-message-index="${messageIndex}"]`);
-    messageElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
-
-  const handleNextSearch = () => {
-    if (messageSearchResults.length === 0) return;
-    const nextIndex = (currentSearchIndex + 1) % messageSearchResults.length;
-    setCurrentSearchIndex(nextIndex);
-    scrollToSearchResult(nextIndex);
-  };
-
-  const handlePrevSearch = () => {
-    if (messageSearchResults.length === 0) return;
-    const prevIndex = currentSearchIndex <= 0 ? messageSearchResults.length - 1 : currentSearchIndex - 1;
-    setCurrentSearchIndex(prevIndex);
-    scrollToSearchResult(prevIndex);
   };
 
   // Message search within conversation
@@ -1229,11 +1187,28 @@ export default function Home() {
             
             {/* Search results */}
             <div className="max-h-[50vh] overflow-y-auto">
-              {searchResults.length === 0 && searchQuery && !isSearching ? (
-                <div className="px-4 py-8 text-center text-chat-muted">
-                  No results found for "{searchQuery}"
+              {isSearching ? (
+                <div className="px-4 py-6 space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="animate-pulse">
+                      <div className="h-16 bg-chat-input/50 rounded-lg" />
+                    </div>
+                  ))}
                 </div>
-              ) : (
+              ) : searchResults.length === 0 && searchQuery ? (
+                <div className="px-4 py-12 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-chat-input/50 flex items-center justify-center">
+                    <Search size={32} className="text-chat-muted" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">No results found</h3>
+                  <p className="text-sm text-chat-muted mb-4">
+                    No conversations match "{searchQuery}"
+                  </p>
+                  <p className="text-xs text-chat-muted">
+                    Try different keywords or check your spelling
+                  </p>
+                </div>
+              ) : searchResults.length > 0 ? (
                 searchResults.map((result, index) => (
                   <button
                     key={index}
@@ -1255,12 +1230,21 @@ export default function Home() {
                     </p>
                   </button>
                 ))
-              )}
-              
-              {!searchQuery && (
-                <div className="px-4 py-6 text-center text-chat-muted text-sm">
-                  <p>Type to search across all your conversations</p>
-                  <p className="mt-2 text-xs">Press <kbd className="px-1.5 py-0.5 mx-0.5 rounded bg-chat-hover">Enter</kbd> to search, <kbd className="px-1.5 py-0.5 mx-0.5 rounded bg-chat-hover">Esc</kbd> to close</p>
+              ) : (
+                <div className="px-4 py-12 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-chat-accent/20 to-emerald-600/20 flex items-center justify-center">
+                    <Search size={32} className="text-chat-accent" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Search your conversations</h3>
+                  <p className="text-sm text-chat-muted mb-4">
+                    Type to search across all your conversations
+                  </p>
+                  <div className="flex items-center justify-center gap-2 text-xs text-chat-muted">
+                    <kbd className="px-2 py-1 rounded bg-chat-hover">Enter</kbd>
+                    <span>to search</span>
+                    <kbd className="px-2 py-1 rounded bg-chat-hover">Esc</kbd>
+                    <span>to close</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -1375,11 +1359,30 @@ export default function Home() {
 
         <div className="flex-1 overflow-y-auto px-2 py-2">
           {isFetchingConversations ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 size={24} className="animate-spin text-gray-500" />
+            <div className="space-y-2 py-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="h-12 rounded-lg bg-chat-input/50" />
+                </div>
+              ))}
             </div>
           ) : conversations.length === 0 ? (
-            <p className="text-center text-gray-500 text-sm py-8">No conversations yet</p>
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-chat-accent/20 to-emerald-600/20 flex items-center justify-center mb-4">
+                <MessageSquare size={32} className="text-chat-accent" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">No conversations yet</h3>
+              <p className="text-sm text-chat-muted mb-4 max-w-xs">
+                Start a new conversation to begin chatting with your AI assistant
+              </p>
+              <button
+                onClick={createNewConversation}
+                className="px-4 py-2 rounded-lg bg-chat-accent hover:bg-chat-accent-hover text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <Plus size={16} />
+                New Conversation
+              </button>
+            </div>
           ) : (
             conversations.map(conv => (
               <div
@@ -1701,7 +1704,21 @@ export default function Home() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto">
-          {messages.length === 0 ? (
+          {isLoadingMessages ? (
+            <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-chat-input/50" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-chat-input/50 rounded w-1/4" />
+                      <div className="h-20 bg-chat-input/50 rounded-lg" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center px-4">
               <div className="max-w-lg text-center">
                 <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center glow-accent">
