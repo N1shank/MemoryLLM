@@ -26,6 +26,9 @@ import {
   UploadedFile,
   templatesApi,
   Template,
+  foldersApi,
+  Folder,
+  draftsApi,
 } from '@/lib/api';
 
 interface Attachment {
