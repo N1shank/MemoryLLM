@@ -408,17 +408,17 @@ export default function Home() {
     setMessages([...existingMessages, userMessage, assistantMessage]);
     setIsLoading(true);
     
-    // Clear draft when sending message
+    // Clear draft when sending message (async, don't block)
     if (conversationId) {
-      try {
-        await draftsApi.getForConversation(conversationId).then(draft => {
+      draftsApi.getForConversation(conversationId)
+        .then(draft => {
           if (draft) {
-            draftsApi.delete(draft.id).catch(() => {});
+            return draftsApi.delete(draft.id);
           }
-        }).catch(() => {});
-      } catch {
-        // Ignore errors
-      }
+        })
+        .catch(() => {
+          // Ignore errors - draft clearing is not critical
+        });
     }
 
     try {

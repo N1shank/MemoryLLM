@@ -36,6 +36,9 @@ async def get_db() -> AsyncSession:
 
 async def init_db():
     """Initialize database tables."""
+    # Import all models to ensure they're registered with Base.metadata
+    from app.models import User, Conversation, Message, ConversationTemplate, Folder, Draft  # noqa: F401
+    
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
