@@ -112,9 +112,20 @@ export default function Home() {
   const [templateTitle, setTemplateTitle] = useState('');
   const [templateContent, setTemplateContent] = useState('');
   
+  // Folders
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [isLoadingFolders, setIsLoadingFolders] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+  
+  // Tags
+  const [editingTags, setEditingTags] = useState<number | null>(null);
+  const [tagInput, setTagInput] = useState('');
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const draftSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Redirect to login if not authenticated (only after auth check is complete)
   useEffect(() => {
@@ -191,12 +202,57 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyboard);
   }, [messages.length, editingMessageId, menuOpenId, mobileMenuOpen]);
 
-  // Fetch conversations on mount
+  // Fetch conversations and folders on mount
   useEffect(() => {
     if (isAuthenticated) {
       fetchConversations();
+      fetchFolders();
     }
   }, [isAuthenticated]);
+
+  const fetchFolders = async () => {
+    try {
+      setIsLoadingFolders(true);
+      const folderList = await foldersApi.list();
+      setFolders(folderList);
+    } catch (e) {
+      console.error('Failed to load folders:', e);
+    } finally {
+      setIsLoadingFolders(false);
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    try {
+      const folder = await foldersApi.create(newFolderName.trim());
+      setFolders(prev => [...prev, folder]);
+      setNewFolderName('');
+      setShowNewFolderInput(false);
+    } catch (e) {
+      setError('Failed to create folder');
+    }
+  };
+
+  const handleMoveToFolder = async (conversationId: number, folderId: number | null) => {
+    try {
+      await conversationsApi.updateFolder(conversationId, folderId);
+      await fetchConversations();
+    } catch (e) {
+      setError('Failed to move conversation');
+    }
+  };
+
+  const handleUpdateTags = async (conversationId: number, tags: string[]) => {
+    try {
+      await conversationsApi.updateTags(conversationId, tags);
+      await fetchConversations();
+      setEditingTags(null);
+      setTagInput('');
+    } catch (e) {
+      setError('Failed to update tags');
+    }
+  };
 
   // Close mobile menu when selecting a conversation
   useEffect(() => {
@@ -275,6 +331,54 @@ export default function Home() {
     }
   }, [input]);
 
+  // Auto-save drafts
+  useEffect(() => {
+    if (draftSaveTimeoutRef.current) {
+      clearTimeout(draftSaveTimeoutRef.current);
+    }
+
+    if (input.trim() && currentConversationId) {
+      draftSaveTimeoutRef.current = setTimeout(async () => {
+        try {
+          await draftsApi.createOrUpdate(currentConversationId, input);
+        } catch (e) {
+          // Silently fail - drafts are not critical
+          console.error('Failed to save draft:', e);
+        }
+      }, 2000); // Save after 2 seconds of inactivity
+    } else if (input.trim() && !currentConversationId) {
+      // Save global draft
+      draftSaveTimeoutRef.current = setTimeout(async () => {
+        try {
+          await draftsApi.createGlobal(input);
+        } catch (e) {
+          console.error('Failed to save draft:', e);
+        }
+      }, 2000);
+    }
+
+    return () => {
+      if (draftSaveTimeoutRef.current) {
+        clearTimeout(draftSaveTimeoutRef.current);
+      }
+    };
+  }, [input, currentConversationId]);
+
+  // Load draft when conversation is loaded (only if input is empty)
+  useEffect(() => {
+    if (currentConversationId && !input.trim()) {
+      draftsApi.getForConversation(currentConversationId)
+        .then(draft => {
+          if (draft && draft.content) {
+            setInput(draft.content);
+          }
+        })
+        .catch(() => {
+          // Ignore errors
+        });
+    }
+  }, [currentConversationId]);
+
   const createNewConversation = () => {
     setCurrentConversationId(null);
     setMessages([]);
@@ -303,6 +407,19 @@ export default function Home() {
 
     setMessages([...existingMessages, userMessage, assistantMessage]);
     setIsLoading(true);
+    
+    // Clear draft when sending message
+    if (conversationId) {
+      try {
+        await draftsApi.getForConversation(conversationId).then(draft => {
+          if (draft) {
+            draftsApi.delete(draft.id).catch(() => {});
+          }
+        }).catch(() => {});
+      } catch {
+        // Ignore errors
+      }
+    }
 
     try {
       let newConversationId = conversationId;
@@ -487,18 +604,38 @@ export default function Home() {
   const submitEditMessage = async (messageId: number | string) => {
     if (!editMessageContent.trim() || isLoading) return;
     
-    // Find the message index
-    const messageIndex = messages.findIndex(m => m.id === messageId);
-    if (messageIndex === -1) return;
-    
-    // Keep messages up to and including the edited message (remove following messages)
-    const messagesBeforeEdit = messages.slice(0, messageIndex);
+    // Find the message
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
     
     setEditingMessageId(null);
+    setIsLoading(true);
     
-    // Send the edited message and get new response
-    await sendMessageWithContent(editMessageContent, currentConversationId, messagesBeforeEdit);
-    setEditMessageContent('');
+    try {
+      if (typeof messageId === 'number') {
+        // For AI messages, use the edit endpoint
+        if (message.role === 'assistant') {
+          const updated = await chatApi.editMessage(messageId, editMessageContent);
+          setMessages(prev => 
+            prev.map(m => m.id === messageId ? { ...m, content: updated.content } : m)
+          );
+        } else {
+          // For user messages, resend with new content
+          const messageIndex = messages.findIndex(m => m.id === messageId);
+          const messagesBeforeEdit = messages.slice(0, messageIndex);
+          await sendMessageWithContent(editMessageContent, currentConversationId, messagesBeforeEdit);
+        }
+      } else {
+        // Temporary message - just resend
+        const messageIndex = messages.findIndex(m => m.id === messageId);
+        const messagesBeforeEdit = messages.slice(0, messageIndex);
+        await sendMessageWithContent(editMessageContent, currentConversationId, messagesBeforeEdit);
+      }
+      setEditMessageContent('');
+    } catch (e) {
+      setError('Failed to edit message');
+      setIsLoading(false);
+    }
   };
 
   const handleFeedback = async (messageId: number | string, feedback: 'thumbs_up' | 'thumbs_down' | null) => {
@@ -1155,6 +1292,71 @@ export default function Home() {
         </div>
       )}
 
+      {/* Tag editing modal */}
+      {editingTags !== null && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
+          onClick={() => {
+            setEditingTags(null);
+            setTagInput('');
+          }}
+        >
+          <div 
+            className="w-full max-w-md bg-chat-sidebar rounded-xl border border-chat-border shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-chat-border">
+              <h3 className="text-lg font-semibold">Edit Tags</h3>
+              <button
+                onClick={() => {
+                  setEditingTags(null);
+                  setTagInput('');
+                }}
+                className="p-1 hover:bg-chat-hover rounded"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const tags = tagInput.split(',').map(t => t.trim()).filter(t => t);
+                    handleUpdateTags(editingTags, tags);
+                  }
+                }}
+                placeholder="Enter tags separated by commas"
+                className="w-full px-4 py-3 rounded-lg bg-chat-input border border-chat-border focus:border-chat-accent focus:outline-none"
+                autoFocus
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setEditingTags(null);
+                    setTagInput('');
+                  }}
+                  className="px-4 py-2 rounded-lg hover:bg-chat-hover transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const tags = tagInput.split(',').map(t => t.trim()).filter(t => t);
+                    handleUpdateTags(editingTags, tags);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-chat-accent hover:bg-chat-accent-hover transition-colors"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search modal */}
       {searchOpen && (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-start justify-center pt-[15vh]">
@@ -1303,6 +1505,73 @@ export default function Home() {
                 <Square size={16} />
                 <span>Select multiple</span>
               </button>
+              
+              {/* Folders section */}
+              <div className="pt-2 border-t border-chat-border mt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-chat-muted uppercase">Folders</span>
+                  <button
+                    onClick={() => setShowNewFolderInput(true)}
+                    className="p-1 hover:bg-chat-hover rounded text-chat-muted hover:text-chat-accent"
+                    title="New folder"
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
+                {showNewFolderInput && (
+                  <div className="mb-2 flex gap-1">
+                    <input
+                      type="text"
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleCreateFolder();
+                        } else if (e.key === 'Escape') {
+                          setShowNewFolderInput(false);
+                          setNewFolderName('');
+                        }
+                      }}
+                      placeholder="Folder name"
+                      className="flex-1 px-2 py-1 text-xs bg-chat-input rounded focus:outline-none focus:ring-1 focus:ring-chat-accent"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleCreateFolder}
+                      className="px-2 py-1 text-xs rounded bg-chat-accent hover:bg-chat-accent-hover"
+                    >
+                      <Check size={12} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowNewFolderInput(false);
+                        setNewFolderName('');
+                      }}
+                      className="px-2 py-1 text-xs rounded hover:bg-chat-hover"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+                {folders.length > 0 && (
+                  <div className="space-y-1">
+                    {folders.map(folder => (
+                      <div
+                        key={folder.id}
+                        className="flex items-center gap-2 px-2 py-1 rounded hover:bg-chat-hover text-xs text-chat-muted cursor-pointer"
+                        onClick={() => {
+                          // Filter conversations by folder
+                          // This could be enhanced to show only conversations in this folder
+                        }}
+                      >
+                        <FileText size={12} />
+                        <span className="flex-1 truncate">{folder.name}</span>
+                        <span className="text-chat-muted/50">({folder.conversation_count})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             <div className="space-y-2">
@@ -1443,7 +1712,26 @@ export default function Home() {
                         </div>
                       )}
                       {conv.is_pinned && <Pin size={14} className="text-chat-accent shrink-0" />}
-                      <span className="truncate">{conv.title}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate">{conv.title}</div>
+                        {conv.tags && conv.tags.length > 0 && (
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {conv.tags.slice(0, 2).map((tag, idx) => (
+                              <span
+                                key={idx}
+                                className="px-1.5 py-0.5 text-xs rounded bg-chat-accent/10 text-chat-accent border border-chat-accent/20"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                            {conv.tags.length > 2 && (
+                              <span className="px-1.5 py-0.5 text-xs text-chat-muted">
+                                +{conv.tags.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </button>
                     
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1485,6 +1773,43 @@ export default function Home() {
                           >
                             <Pencil size={14} />
                             Rename
+                          </button>
+                          <div className="border-t border-chat-border my-1" />
+                          <div className="px-3 py-1 text-xs text-chat-muted">Move to folder</div>
+                          <button
+                            onClick={() => {
+                              handleMoveToFolder(conv.id, null);
+                              setMenuOpenId(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
+                          >
+                            <FileText size={14} />
+                            No folder
+                          </button>
+                          {folders.map(folder => (
+                            <button
+                              key={folder.id}
+                              onClick={() => {
+                                handleMoveToFolder(conv.id, folder.id);
+                                setMenuOpenId(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
+                            >
+                              <FileText size={14} />
+                              {folder.name}
+                            </button>
+                          ))}
+                          <div className="border-t border-chat-border my-1" />
+                          <button
+                            onClick={() => {
+                              setEditingTags(conv.id);
+                              setTagInput(conv.tags?.join(', ') || '');
+                              setMenuOpenId(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
+                          >
+                            <Bookmark size={14} />
+                            Edit tags
                           </button>
                           <button
                             onClick={() => handleToggleArchive(conv.id, conv.is_archived)}
@@ -1928,6 +2253,54 @@ export default function Home() {
                             >
                               <RefreshCw size={14} />
                             </button>
+                            {typeof message.id === 'number' && (
+                              <>
+                                <div className="w-px h-4 bg-chat-border mx-1" />
+                                <button
+                                  onClick={() => handleEditMessage(message)}
+                                  disabled={isLoading}
+                                  className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                                  title="Edit message"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                        {/* Edit mode for assistant messages */}
+                        {editingMessageId === message.id && typeof message.id === 'number' && (
+                          <div className="mt-2 space-y-2">
+                            <textarea
+                              ref={editTextareaRef}
+                              value={editMessageContent}
+                              onChange={(e) => setEditMessageContent(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  submitEditMessage(message.id);
+                                } else if (e.key === 'Escape') {
+                                  cancelEditMessage();
+                                }
+                              }}
+                              className="w-full px-4 py-3 rounded-lg bg-chat-input border border-chat-accent/50 focus:outline-none focus:ring-1 focus:ring-chat-accent resize-none"
+                              autoFocus
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={cancelEditMessage}
+                                className="px-3 py-1.5 text-sm rounded-lg hover:bg-chat-hover transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => submitEditMessage(message.id)}
+                                disabled={!editMessageContent.trim() || isLoading}
+                                className="px-3 py-1.5 text-sm rounded-lg bg-chat-accent hover:bg-chat-accent-hover disabled:opacity-50 transition-colors"
+                              >
+                                {isLoading ? 'Saving...' : 'Save'}
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>

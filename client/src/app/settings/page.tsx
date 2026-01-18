@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   ArrowLeft, User, Mail, AtSign, Lock, Trash2, 
-  Loader2, Check, AlertCircle, Eye, EyeOff, BookOpen, ExternalLink
+  Loader2, Check, AlertCircle, Eye, EyeOff, BookOpen, ExternalLink, X
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { userApi, ApiClientError } from '@/lib/api';
@@ -456,6 +456,55 @@ export default function SettingsPage() {
               )}
             </button>
           </form>
+
+          {/* Notion Pages Selector */}
+          {user?.notion_api_key_configured && (
+            <div className="mt-6 pt-6 border-t border-chat-border">
+              <h3 className="text-sm font-semibold mb-3">Selected Notion Pages</h3>
+              <p className="text-xs text-chat-muted mb-4">
+                Manage which Notion pages the AI can access. Pages are selected by sharing them with your integration in Notion.
+              </p>
+              {user.notion_pages && user.notion_pages.length > 0 ? (
+                <div className="space-y-2">
+                  {user.notion_pages.map((page: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-3 rounded-lg bg-chat-input border border-chat-border"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{page.title || 'Untitled Page'}</p>
+                        {page.id && (
+                          <p className="text-xs text-chat-muted mt-1 font-mono">{page.id}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const updatedPages = user.notion_pages?.filter((_: any, i: number) => i !== idx) || [];
+                          try {
+                            await userApi.updateNotionPages(updatedPages);
+                            await refreshUser();
+                          } catch (e) {
+                            console.error('Failed to update pages:', e);
+                          }
+                        }}
+                        className="p-1.5 rounded hover:bg-red-500/10 text-red-400"
+                        title="Remove page"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-chat-muted text-center py-4">
+                  No pages selected. Share pages with your integration in Notion to add them here.
+                </p>
+              )}
+              <p className="text-xs text-chat-muted mt-4">
+                <strong>Note:</strong> To add pages, go to your Notion workspace, open a page, click "..." → "Add connections" → Select your integration.
+              </p>
+            </div>
+          )}
         </section>
 
         {/* Password Section */}
