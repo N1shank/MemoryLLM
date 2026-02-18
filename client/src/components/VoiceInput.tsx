@@ -87,11 +87,10 @@ export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
     <button
       onClick={toggleListening}
       disabled={disabled}
-      className={`p-2 rounded-lg transition-all duration-200 ${
-        isListening
+      className={`p-2 rounded-lg transition-all duration-200 ${isListening
           ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 animate-pulse'
           : 'hover:bg-chat-hover text-chat-muted hover:text-foreground'
-      } disabled:opacity-50 disabled:cursor-not-allowed`}
+        } disabled:opacity-50 disabled:cursor-not-allowed`}
       title={isListening ? 'Stop recording' : 'Voice input'}
     >
       {isListening ? (
@@ -109,8 +108,34 @@ export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
 // Type declarations for Web Speech API
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+  interface SpeechRecognition extends EventTarget {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    onresult: ((event: SpeechRecognitionEvent) => void) | null;
+    onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+    onend: (() => void) | null;
+    start(): void;
+    stop(): void;
+    abort(): void;
+  }
+  interface SpeechRecognitionEvent extends Event {
+    resultIndex: number;
+    results: {
+      length: number;
+      [index: number]: {
+        isFinal: boolean;
+        [index: number]: {
+          transcript: string;
+        };
+      };
+    };
+  }
+  interface SpeechRecognitionErrorEvent extends Event {
+    error: string;
   }
 }
 

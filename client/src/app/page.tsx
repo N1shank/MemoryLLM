@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  Send, Plus, Brain, Menu, X, LogOut, 
+import {
+  Send, Plus, Brain, Menu, X, LogOut,
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
   Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
   Settings, HelpCircle, Keyboard, Pin, PinOff, ThumbsUp, ThumbsDown, Archive,
@@ -18,10 +18,10 @@ import { FileAttachmentButton, AttachmentPreview, MessageAttachment } from '@/co
 import { ShareButton } from '@/components/ShareButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { 
-  conversationsApi, 
-  chatApi, 
-  Conversation, 
+import {
+  conversationsApi,
+  chatApi,
+  Conversation,
   ApiClientError,
   UploadedFile,
   templatesApi,
@@ -52,7 +52,7 @@ export default function Home() {
   const router = useRouter();
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
   const [messages, setMessages] = useState<LocalMessage[]>([]);
@@ -63,22 +63,22 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Edit/delete conversation state
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
-  
+
   // Edit message state
   const [editingMessageId, setEditingMessageId] = useState<number | string | null>(null);
   const [editMessageContent, setEditMessageContent] = useState('');
-  
+
   // Copy state
   const [copiedMessageId, setCopiedMessageId] = useState<number | string | null>(null);
-  
+
   // Attachment state
   const [pendingAttachments, setPendingAttachments] = useState<UploadedFile[]>([]);
-  
+
   // Search state
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,20 +90,20 @@ export default function Home() {
   }>>([]);
   const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Message search within conversation
   const [messageSearchQuery, setMessageSearchQuery] = useState('');
   const [messageSearchResults, setMessageSearchResults] = useState<number[]>([]);
   const [currentMessageSearchIndex, setCurrentMessageSearchIndex] = useState(-1);
-  const messageSearchRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  
+  const messageSearchRefs = useRef<Map<number | string, HTMLDivElement>>(new Map());
+
   // Bulk selection state
   const [selectedConversations, setSelectedConversations] = useState<Set<number>>(new Set());
   const [bulkMode, setBulkMode] = useState(false);
-  
+
   // Shortcuts help modal state
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  
+
   // Templates
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -111,17 +111,17 @@ export default function Home() {
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateTitle, setTemplateTitle] = useState('');
   const [templateContent, setTemplateContent] = useState('');
-  
+
   // Folders
   const [folders, setFolders] = useState<Folder[]>([]);
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
-  
+
   // Tags
   const [editingTags, setEditingTags] = useState<number | null>(null);
   const [tagInput, setTagInput] = useState('');
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -146,7 +146,7 @@ export default function Home() {
         createNewConversation();
         textareaRef.current?.focus();
       }
-      
+
       // Cmd/Ctrl + B: Toggle sidebar
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
         e.preventDefault();
@@ -156,7 +156,7 @@ export default function Home() {
           setSidebarOpen(prev => !prev);
         }
       }
-      
+
       // Cmd/Ctrl + Shift + E: Export as Markdown
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'e') {
         e.preventDefault();
@@ -164,7 +164,7 @@ export default function Home() {
           exportConversation('markdown');
         }
       }
-      
+
       // Escape: Close modals/editing
       if (e.key === 'Escape') {
         if (editingMessageId) {
@@ -177,27 +177,27 @@ export default function Home() {
           setMobileMenuOpen(false);
         }
       }
-      
+
       // /: Focus input (when not already focused)
       if (e.key === '/' && document.activeElement?.tagName !== 'TEXTAREA' && document.activeElement?.tagName !== 'INPUT') {
         e.preventDefault();
         textareaRef.current?.focus();
       }
-      
+
       // Cmd/Ctrl + F: Open search
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
         setSearchOpen(true);
         setTimeout(() => searchInputRef.current?.focus(), 100);
       }
-      
+
       // Cmd/Ctrl + ? or Shift + ?: Open shortcuts help
       if (((e.metaKey || e.ctrlKey) && e.key === '?') || (e.shiftKey && e.key === '?')) {
         e.preventDefault();
         setShortcutsOpen(true);
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyboard);
     return () => window.removeEventListener('keydown', handleKeyboard);
   }, [messages.length, editingMessageId, menuOpenId, mobileMenuOpen]);
@@ -207,6 +207,7 @@ export default function Home() {
     if (isAuthenticated) {
       fetchConversations();
       fetchFolders();
+      fetchTemplates();
     }
   }, [isAuthenticated]);
 
@@ -254,6 +255,47 @@ export default function Home() {
     }
   };
 
+  const fetchTemplates = async () => {
+    try {
+      setIsLoadingTemplates(true);
+      const templateList = await templatesApi.list();
+      setTemplates(templateList);
+    } catch (e) {
+      console.error('Failed to load templates:', e);
+    } finally {
+      setIsLoadingTemplates(false);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!templateTitle.trim() || !templateContent.trim()) return;
+    try {
+      setSavingTemplate(true);
+      const template = await templatesApi.create(templateTitle.trim(), templateContent.trim());
+      setTemplates(prev => [...prev, template]);
+      setTemplateTitle('');
+      setTemplateContent('');
+    } catch (e) {
+      setError('Failed to save template');
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const handleUseTemplate = (template: Template) => {
+    setInput(template.content);
+    setTemplatesOpen(false);
+  };
+
+  const handleDeleteTemplate = async (id: number) => {
+    try {
+      await templatesApi.delete(id);
+      setTemplates(prev => prev.filter(t => t.id !== id));
+    } catch (e) {
+      setError('Failed to delete template');
+    }
+  };
+
   // Close mobile menu when selecting a conversation
   useEffect(() => {
     if (currentConversationId && mobileMenuOpen) {
@@ -290,7 +332,7 @@ export default function Home() {
     setError(null);
     setIsLoadingMessages(true);
     setMessages([]);
-    
+
     try {
       const conv = await conversationsApi.get(id);
       setMessages(conv.messages.map(m => ({
@@ -407,7 +449,7 @@ export default function Home() {
 
     setMessages([...existingMessages, userMessage, assistantMessage]);
     setIsLoading(true);
-    
+
     // Clear draft when sending message (async, don't block)
     if (conversationId) {
       draftsApi.getForConversation(conversationId)
@@ -423,7 +465,7 @@ export default function Home() {
 
     try {
       let newConversationId = conversationId;
-      
+
       for await (const event of chatApi.sendStream(content.trim(), conversationId || undefined)) {
         if (event.type === 'chunk') {
           setMessages(prev => {
@@ -436,7 +478,7 @@ export default function Home() {
           });
         } else if (event.type === 'done') {
           newConversationId = event.conversation_id || null;
-          
+
           setMessages(prev => {
             const updated = [...prev];
             const lastMsg = updated[updated.length - 1];
@@ -457,20 +499,20 @@ export default function Home() {
         fetchConversations();
       }
     } catch (e) {
-      const errorMessage = e instanceof ApiClientError 
-        ? e.message 
-        : e instanceof Error 
-          ? e.message 
+      const errorMessage = e instanceof ApiClientError
+        ? e.message
+        : e instanceof Error
+          ? e.message
           : 'Failed to send message';
-      
+
       if (e instanceof ApiClientError && e.status === 401) {
         logout();
         router.push('/auth/login');
         return;
       }
-      
+
       setError(errorMessage);
-      
+
       setMessages(prev => {
         const updated = [...prev];
         const lastMsg = updated[updated.length - 1];
@@ -487,11 +529,11 @@ export default function Home() {
 
   const sendMessage = async () => {
     if ((!input.trim() && pendingAttachments.length === 0) || isLoading) return;
-    
+
     // Build message content with attachments
     let content = input.trim();
     const attachments: Attachment[] = [];
-    
+
     if (pendingAttachments.length > 0) {
       for (const file of pendingAttachments) {
         attachments.push({
@@ -503,10 +545,10 @@ export default function Home() {
         content += `\n[Attached file: ${file.original_name}]`;
       }
     }
-    
+
     setInput('');
     setPendingAttachments([]);
-    
+
     // Send with attachments
     const userMessage: LocalMessage = {
       id: `temp-${Date.now()}`,
@@ -529,7 +571,7 @@ export default function Home() {
 
     try {
       let newConversationId = currentConversationId;
-      
+
       for await (const event of chatApi.sendStream(content, currentConversationId || undefined)) {
         if (event.type === 'chunk') {
           setMessages(prev => {
@@ -542,7 +584,7 @@ export default function Home() {
           });
         } else if (event.type === 'done') {
           newConversationId = event.conversation_id || null;
-          
+
           setMessages(prev => {
             const updated = [...prev];
             const lastMsg = updated[updated.length - 1];
@@ -563,20 +605,20 @@ export default function Home() {
         fetchConversations();
       }
     } catch (e) {
-      const errorMessage = e instanceof ApiClientError 
-        ? e.message 
-        : e instanceof Error 
-          ? e.message 
+      const errorMessage = e instanceof ApiClientError
+        ? e.message
+        : e instanceof Error
+          ? e.message
           : 'Failed to send message';
-      
+
       if (e instanceof ApiClientError && e.status === 401) {
         logout();
         router.push('/auth/login');
         return;
       }
-      
+
       setError(errorMessage);
-      
+
       setMessages(prev => {
         const updated = [...prev];
         const lastMsg = updated[updated.length - 1];
@@ -603,20 +645,20 @@ export default function Home() {
 
   const submitEditMessage = async (messageId: number | string) => {
     if (!editMessageContent.trim() || isLoading) return;
-    
+
     // Find the message
     const message = messages.find(m => m.id === messageId);
     if (!message) return;
-    
+
     setEditingMessageId(null);
     setIsLoading(true);
-    
+
     try {
       if (typeof messageId === 'number') {
         // For AI messages, use the edit endpoint
         if (message.role === 'assistant') {
           const updated = await chatApi.editMessage(messageId, editMessageContent);
-          setMessages(prev => 
+          setMessages(prev =>
             prev.map(m => m.id === messageId ? { ...m, content: updated.content } : m)
           );
         } else {
@@ -640,10 +682,10 @@ export default function Home() {
 
   const handleFeedback = async (messageId: number | string, feedback: 'thumbs_up' | 'thumbs_down' | null) => {
     if (typeof messageId !== 'number') return;
-    
+
     try {
       const updated = await chatApi.updateFeedback(messageId, feedback);
-      setMessages(prev => 
+      setMessages(prev =>
         prev.map(m => m.id === messageId ? { ...m, feedback: updated.feedback } : m)
       );
     } catch {
@@ -653,29 +695,25 @@ export default function Home() {
 
   const regenerateResponse = async (messageIndex: number) => {
     if (isLoading || !currentConversationId) return;
-    
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const response = await chatApi.regenerate(currentConversationId);
-      
+
       // Reload conversation to get updated messages
       await loadConversation(currentConversationId);
     } catch (e) {
-      const errorMessage = e instanceof ApiClientError 
-        ? e.message 
-        : e instanceof Error 
-          ? e.message 
+      const errorMessage = e instanceof ApiClientError
+        ? e.message
+        : e instanceof Error
+          ? e.message
           : 'Failed to regenerate response';
       setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  };
-    
-    // Re-send the user message
-    await sendMessageWithContent(userMessage.content, currentConversationId, messagesBeforeRegenerate);
   };
 
   const copyMessage = async (content: string, messageId: number | string) => {
@@ -695,20 +733,20 @@ export default function Home() {
       setCurrentMessageSearchIndex(-1);
       return;
     }
-    
+
     const query = messageSearchQuery.toLowerCase();
     const results: number[] = [];
-    
+
     messages.forEach((msg, index) => {
       if (msg.content.toLowerCase().includes(query)) {
         results.push(index);
       }
     });
-    
+
     setMessageSearchResults(results);
     setCurrentMessageSearchIndex(results.length > 0 ? 0 : -1);
   }, [messageSearchQuery, messages]);
-  
+
   // Scroll to search result
   useEffect(() => {
     if (currentMessageSearchIndex >= 0 && messageSearchResults.length > 0) {
@@ -720,16 +758,16 @@ export default function Home() {
       }
     }
   }, [currentMessageSearchIndex, messageSearchResults, messages]);
-  
+
   const navigateMessageSearch = (direction: 'next' | 'prev') => {
     if (messageSearchResults.length === 0) return;
-    
+
     if (direction === 'next') {
-      setCurrentMessageSearchIndex(prev => 
+      setCurrentMessageSearchIndex(prev =>
         prev < messageSearchResults.length - 1 ? prev + 1 : 0
       );
     } else {
-      setCurrentMessageSearchIndex(prev => 
+      setCurrentMessageSearchIndex(prev =>
         prev > 0 ? prev - 1 : messageSearchResults.length - 1
       );
     }
@@ -743,12 +781,12 @@ export default function Home() {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
-    
+
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    
+
     // Show date for older messages
     const isToday = date.toDateString() === now.toDateString();
     if (isToday) {
@@ -759,15 +797,15 @@ export default function Home() {
 
   const exportConversation = (format: 'json' | 'markdown') => {
     if (messages.length === 0) return;
-    
+
     const conversation = conversations.find(c => c.id === currentConversationId);
     const title = conversation?.title || 'conversation';
     const timestamp = new Date().toISOString().split('T')[0];
-    
+
     let content: string;
     let filename: string;
     let mimeType: string;
-    
+
     if (format === 'json') {
       content = JSON.stringify({
         title,
@@ -789,7 +827,7 @@ export default function Home() {
         `---`,
         ``,
       ];
-      
+
       for (const msg of messages) {
         if (msg.role === 'user') {
           lines.push(`## You`);
@@ -805,12 +843,12 @@ export default function Home() {
         lines.push(`---`);
         lines.push(``);
       }
-      
+
       content = lines.join('\n');
       filename = `${title.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.md`;
       mimeType = 'text/markdown';
     }
-    
+
     // Create and download file
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
@@ -842,10 +880,10 @@ export default function Home() {
 
   const handleRename = async (id: number) => {
     if (!editTitle.trim()) return;
-    
+
     try {
       await conversationsApi.update(id, editTitle.trim());
-      setConversations(prev => 
+      setConversations(prev =>
         prev.map(c => c.id === id ? { ...c, title: editTitle.trim() } : c)
       );
       setEditingId(null);
@@ -858,7 +896,7 @@ export default function Home() {
   const handleTogglePin = async (id: number, currentPinState: boolean) => {
     try {
       const updated = await conversationsApi.togglePin(id, !currentPinState);
-      setConversations(prev => 
+      setConversations(prev =>
         prev.map(c => c.id === id ? updated : c)
       );
       setMenuOpenId(null);
@@ -904,7 +942,7 @@ export default function Home() {
 
   const handleBulkDelete = async () => {
     if (selectedConversations.size === 0) return;
-    
+
     try {
       await Promise.all(
         Array.from(selectedConversations).map(id => conversationsApi.delete(id))
@@ -923,7 +961,7 @@ export default function Home() {
 
   const handleBulkPin = async () => {
     if (selectedConversations.size === 0) return;
-    
+
     try {
       await Promise.all(
         Array.from(selectedConversations).map(id => conversationsApi.togglePin(id, true))
@@ -938,7 +976,7 @@ export default function Home() {
 
   const handleBulkArchive = async () => {
     if (selectedConversations.size === 0) return;
-    
+
     try {
       await Promise.all(
         Array.from(selectedConversations).map(id => conversationsApi.toggleArchive(id, true))
@@ -980,12 +1018,12 @@ export default function Home() {
       setSearchResults([]);
       return;
     }
-    
+
     setIsSearching(true);
     try {
       const results: typeof searchResults = [];
       const query = searchQuery.toLowerCase();
-      
+
       // Search through all conversations
       for (const conv of conversations) {
         try {
@@ -1004,7 +1042,7 @@ export default function Home() {
           // Skip conversations that fail to load
         }
       }
-      
+
       setSearchResults(results.slice(0, 20)); // Limit to 20 results
     } finally {
       setIsSearching(false);
@@ -1046,11 +1084,11 @@ export default function Home() {
     <div className="flex h-screen bg-chat-bg">
       {/* Keyboard Shortcuts Modal */}
       {shortcutsOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
           onClick={() => setShortcutsOpen(false)}
         >
-          <div 
+          <div
             className="w-full max-w-2xl bg-chat-sidebar rounded-xl border border-chat-border shadow-2xl overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
@@ -1072,7 +1110,7 @@ export default function Home() {
                 <X size={20} className="text-chat-muted" />
               </button>
             </div>
-            
+
             {/* Shortcuts List */}
             <div className="p-6 max-h-[60vh] overflow-y-auto">
               <div className="space-y-6">
@@ -1104,7 +1142,7 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
-                
+
                 {/* Search & Actions */}
                 <div>
                   <h3 className="text-sm font-semibold text-chat-accent mb-3 flex items-center gap-2">
@@ -1132,7 +1170,7 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
-                
+
                 {/* General */}
                 <div>
                   <h3 className="text-sm font-semibold text-chat-accent mb-3 flex items-center gap-2">
@@ -1161,7 +1199,7 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              
+
               {/* Footer note */}
               <div className="mt-6 pt-4 border-t border-chat-border text-center">
                 <p className="text-xs text-chat-muted">
@@ -1175,11 +1213,11 @@ export default function Home() {
 
       {/* Templates Modal */}
       {templatesOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
           onClick={() => setTemplatesOpen(false)}
         >
-          <div 
+          <div
             className="w-full max-w-2xl bg-chat-sidebar rounded-xl border border-chat-border shadow-2xl overflow-hidden max-h-[80vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
@@ -1200,7 +1238,7 @@ export default function Home() {
                 <X size={20} className="text-chat-muted" />
               </button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-6">
               <div className="mb-6 p-4 rounded-lg bg-chat-input border border-chat-border">
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -1294,14 +1332,14 @@ export default function Home() {
 
       {/* Tag editing modal */}
       {editingTags !== null && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"
           onClick={() => {
             setEditingTags(null);
             setTagInput('');
           }}
         >
-          <div 
+          <div
             className="w-full max-w-md bg-chat-sidebar rounded-xl border border-chat-border shadow-2xl overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
@@ -1360,7 +1398,7 @@ export default function Home() {
       {/* Search modal */}
       {searchOpen && (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-start justify-center pt-[15vh]">
-          <div 
+          <div
             className="w-full max-w-2xl mx-4 bg-chat-sidebar rounded-xl border border-chat-border shadow-2xl overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
@@ -1389,7 +1427,7 @@ export default function Home() {
                 <X size={18} />
               </button>
             </div>
-            
+
             {/* Search results */}
             <div className="max-h-[50vh] overflow-y-auto">
               {isSearching ? (
@@ -1429,8 +1467,8 @@ export default function Home() {
                       </span>
                     </div>
                     <p className="text-sm line-clamp-2">
-                      {result.messageContent.length > 150 
-                        ? result.messageContent.slice(0, 150) + '...' 
+                      {result.messageContent.length > 150
+                        ? result.messageContent.slice(0, 150) + '...'
                         : result.messageContent}
                     </p>
                   </button>
@@ -1459,7 +1497,7 @@ export default function Home() {
 
       {/* Mobile overlay */}
       {mobileMenuOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/60 z-40 lg:hidden"
           onClick={() => setMobileMenuOpen(false)}
         />
@@ -1485,7 +1523,7 @@ export default function Home() {
                 <Plus size={18} className="group-hover:rotate-90 transition-transform duration-200" />
                 <span className="font-medium">New chat</span>
               </button>
-              
+
               <button
                 onClick={() => {
                   setSearchOpen(true);
@@ -1497,7 +1535,7 @@ export default function Home() {
                 <span>Search</span>
                 <kbd className="ml-auto text-xs px-1.5 py-0.5 rounded bg-chat-hover">⌘F</kbd>
               </button>
-              
+
               <button
                 onClick={() => setBulkMode(true)}
                 className="w-full flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-chat-hover transition-colors text-chat-muted text-sm"
@@ -1505,7 +1543,7 @@ export default function Home() {
                 <Square size={16} />
                 <span>Select multiple</span>
               </button>
-              
+
               {/* Folders section */}
               <div className="pt-2 border-t border-chat-border mt-2">
                 <div className="flex items-center justify-between mb-2">
@@ -1659,11 +1697,10 @@ export default function Home() {
             conversations.map(conv => (
               <div
                 key={conv.id}
-                className={`group relative mb-1 rounded-lg transition-colors ${
-                  conv.id === currentConversationId
-                    ? 'bg-chat-hover'
-                    : 'hover:bg-chat-hover/50'
-                }`}
+                className={`group relative mb-1 rounded-lg transition-colors ${conv.id === currentConversationId
+                  ? 'bg-chat-hover'
+                  : 'hover:bg-chat-hover/50'
+                  }`}
               >
                 {editingId === conv.id ? (
                   <div className="flex items-center gap-2 p-2">
@@ -1698,9 +1735,8 @@ export default function Home() {
                           loadConversation(conv.id);
                         }
                       }}
-                      className={`w-full text-left px-3 py-2.5 ${bulkMode ? 'pr-10' : 'pr-10'} truncate text-sm flex items-center gap-2 ${
-                        selectedConversations.has(conv.id) ? 'bg-chat-accent/20' : ''
-                      }`}
+                      className={`w-full text-left px-3 py-2.5 ${bulkMode ? 'pr-10' : 'pr-10'} truncate text-sm flex items-center gap-2 ${selectedConversations.has(conv.id) ? 'bg-chat-accent/20' : ''
+                        }`}
                     >
                       {bulkMode && (
                         <div className="shrink-0">
@@ -1733,7 +1769,7 @@ export default function Home() {
                         )}
                       </div>
                     </button>
-                    
+
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={(e) => {
@@ -1744,7 +1780,7 @@ export default function Home() {
                       >
                         <MoreHorizontal size={16} />
                       </button>
-                      
+
                       {menuOpenId === conv.id && (
                         <div className="absolute right-0 top-full mt-1 bg-chat-sidebar border border-chat-border rounded-lg shadow-xl py-1 min-w-[120px] z-10">
                           <button
@@ -1852,7 +1888,7 @@ export default function Home() {
               <span className="ml-auto text-xs text-chat-muted group-hover:text-chat-accent">Connect →</span>
             </Link>
           )}
-          
+
           <div className="flex items-center justify-between px-3 py-2">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-chat-accent/20 flex items-center justify-center">
@@ -1911,7 +1947,7 @@ export default function Home() {
             </div>
             <span className="font-semibold">MemoryLLM</span>
           </div>
-          
+
           {/* Message search within conversation */}
           {messages.length > 0 && (
             <div className="flex-1 max-w-md mx-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-chat-input border border-chat-border focus-within:border-chat-accent/50">
@@ -1935,7 +1971,7 @@ export default function Home() {
               {messageSearchQuery && (
                 <div className="flex items-center gap-1 text-xs text-chat-muted">
                   <span>
-                    {messageSearchResults.length > 0 
+                    {messageSearchResults.length > 0
                       ? `${currentMessageSearchIndex + 1}/${messageSearchResults.length}`
                       : '0 results'}
                   </span>
@@ -1968,13 +2004,13 @@ export default function Home() {
               )}
             </div>
           )}
-          
+
           <div className="ml-auto flex items-center gap-1">
             {/* Share button */}
             {currentConversationId && messages.length > 0 && (
               <ShareButton conversationId={currentConversationId} />
             )}
-            
+
             {/* Export dropdown */}
             {messages.length > 0 && (
               <div className="relative group/export">
@@ -2000,7 +2036,7 @@ export default function Home() {
                 </div>
               </div>
             )}
-            
+
             {/* Theme toggle */}
             <button
               onClick={toggleTheme}
@@ -2079,211 +2115,42 @@ export default function Home() {
               {messages.map((message, index) => {
                 const isSearchResult = messageSearchResults.includes(index);
                 const isCurrentSearchResult = currentMessageSearchIndex >= 0 && messageSearchResults[currentMessageSearchIndex] === index;
-                
+
                 return (
-                <div
-                  key={message.id}
-                  ref={(el) => {
-                    if (el && typeof message.id === 'number') {
-                      messageSearchRefs.current.set(message.id, el);
-                    }
-                  }}
-                  data-message-index={index}
-                  className={`group mb-6 animate-fade-in ${message.role === 'user' ? 'flex justify-end' : ''} ${
-                    isCurrentSearchResult ? 'ring-2 ring-chat-accent rounded-lg p-2 -m-2' : ''
-                  } ${isSearchResult && messageSearchQuery ? 'opacity-100' : messageSearchQuery ? 'opacity-40' : ''}`}
-                >
-                  {message.role === 'user' ? (
-                    <div className="max-w-[85%]">
-                      {/* Attachments */}
-                      {message.attachments && message.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-2 justify-end">
-                          {message.attachments.map((att, idx) => (
-                            <MessageAttachment
-                              key={idx}
-                              url={att.url}
-                              filename={att.filename}
-                              isImage={att.isImage}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {editingMessageId === message.id ? (
-                        <div className="space-y-2">
-                          <textarea
-                            ref={editTextareaRef}
-                            value={editMessageContent}
-                            onChange={(e) => setEditMessageContent(e.target.value)}
-                            onKeyDown={(e) => handleEditKeyDown(e, message.id)}
-                            className="w-full px-4 py-3 rounded-2xl bg-chat-input border border-chat-accent/50 focus:outline-none focus:ring-1 focus:ring-chat-accent resize-none"
-                            autoFocus
-                          />
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={cancelEditMessage}
-                              className="px-3 py-1.5 text-sm rounded-lg hover:bg-chat-hover transition-colors"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => submitEditMessage(message.id)}
-                              disabled={!editMessageContent.trim() || isLoading}
-                              className="px-3 py-1.5 text-sm rounded-lg bg-chat-accent hover:bg-chat-accent-hover disabled:opacity-50 transition-colors"
-                            >
-                              {isLoading ? 'Sending...' : 'Send'}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="relative">
-                          <div className="px-4 py-3 rounded-2xl bg-chat-accent/20 border border-chat-accent/30">
-                            {message.content}
-                          </div>
-                          {/* Edit button for user messages */}
-                          {message.created_at && (
-                            <div className="text-xs text-chat-muted mt-1 text-right">
-                              {formatTimestamp(message.created_at)}
-                            </div>
-                          )}
-                          <div className="absolute -bottom-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                            <button
-                              onClick={() => handleEditMessage(message)}
-                              disabled={isLoading}
-                              className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
-                              title="Edit message"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex gap-4">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center shrink-0 glow-accent">
-                        <Brain size={14} className="text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        {message.memory_context && (
-                          <div className="mb-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-chat-accent/10 border border-chat-accent/20 text-xs text-chat-accent">
-                            <Brain size={12} />
-                            {message.memory_context}
+                  <div
+                    key={message.id}
+                    ref={(el) => {
+                      if (el) {
+                        messageSearchRefs.current.set(message.id, el);
+                      }
+                    }}
+                    data-message-index={index}
+                    className={`group mb-6 animate-fade-in ${message.role === 'user' ? 'flex justify-end' : ''} ${isCurrentSearchResult ? 'ring-2 ring-chat-accent rounded-lg p-2 -m-2' : ''
+                      } ${isSearchResult && messageSearchQuery ? 'opacity-100' : messageSearchQuery ? 'opacity-40' : ''}`}
+                  >
+                    {message.role === 'user' ? (
+                      <div className="max-w-[85%]">
+                        {/* Attachments */}
+                        {message.attachments && message.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-2 justify-end">
+                            {message.attachments.map((att, idx) => (
+                              <MessageAttachment
+                                key={idx}
+                                url={att.url}
+                                filename={att.filename}
+                                isImage={att.isImage}
+                              />
+                            ))}
                           </div>
                         )}
-                        <div className="markdown-content">
-                          {message.isStreaming && !message.content ? (
-                            <div className="flex items-center gap-1">
-                              <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
-                              <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
-                              <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
-                            </div>
-                          ) : (
-                            <ReactMarkdown
-                              components={{
-                                code({ className, children, ...props }) {
-                                  const match = /language-(\w+)/.exec(className || '');
-                                  const isInline = !match && !className;
-                                  
-                                  if (isInline) {
-                                    return <InlineCode>{children}</InlineCode>;
-                                  }
-                                  
-                                  return (
-                                    <CodeBlock language={match?.[1]}>
-                                      {String(children).replace(/\n$/, '')}
-                                    </CodeBlock>
-                                  );
-                                },
-                              }}
-                            >
-                              {message.content}
-                            </ReactMarkdown>
-                          )}
-                          {message.isStreaming && message.content && (
-                            <span className="typing-cursor" />
-                          )}
-                        </div>
-                        {message.created_at && (
-                          <div className="text-xs text-chat-muted mt-1">
-                            {formatTimestamp(message.created_at)}
-                          </div>
-                        )}
-                        {/* Action buttons for assistant messages */}
-                        {!message.isStreaming && message.content && (
-                          <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                            <button
-                              onClick={() => handleFeedback(message.id, message.feedback === 'thumbs_up' ? null : 'thumbs_up')}
-                              className={`p-1.5 rounded-md hover:bg-chat-hover transition-colors ${
-                                message.feedback === 'thumbs_up' 
-                                  ? 'text-green-400 bg-green-400/10' 
-                                  : 'text-gray-400 hover:text-green-400'
-                              }`}
-                              title="Thumbs up"
-                            >
-                              <ThumbsUp size={14} />
-                            </button>
-                            <button
-                              onClick={() => handleFeedback(message.id, message.feedback === 'thumbs_down' ? null : 'thumbs_down')}
-                              className={`p-1.5 rounded-md hover:bg-chat-hover transition-colors ${
-                                message.feedback === 'thumbs_down' 
-                                  ? 'text-red-400 bg-red-400/10' 
-                                  : 'text-gray-400 hover:text-red-400'
-                              }`}
-                              title="Thumbs down"
-                            >
-                              <ThumbsDown size={14} />
-                            </button>
-                            <div className="w-px h-4 bg-chat-border mx-1" />
-                            <button
-                              onClick={() => copyMessage(message.content, message.id)}
-                              className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors"
-                              title="Copy message"
-                            >
-                              {copiedMessageId === message.id ? (
-                                <CheckCheck size={14} className="text-green-400" />
-                              ) : (
-                                <Copy size={14} />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => regenerateResponse(index)}
-                              disabled={isLoading}
-                              className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
-                              title="Regenerate response"
-                            >
-                              <RefreshCw size={14} />
-                            </button>
-                            {typeof message.id === 'number' && (
-                              <>
-                                <div className="w-px h-4 bg-chat-border mx-1" />
-                                <button
-                                  onClick={() => handleEditMessage(message)}
-                                  disabled={isLoading}
-                                  className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
-                                  title="Edit message"
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                        {/* Edit mode for assistant messages */}
-                        {editingMessageId === message.id && typeof message.id === 'number' && (
-                          <div className="mt-2 space-y-2">
+                        {editingMessageId === message.id ? (
+                          <div className="space-y-2">
                             <textarea
                               ref={editTextareaRef}
                               value={editMessageContent}
                               onChange={(e) => setEditMessageContent(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                  e.preventDefault();
-                                  submitEditMessage(message.id);
-                                } else if (e.key === 'Escape') {
-                                  cancelEditMessage();
-                                }
-                              }}
-                              className="w-full px-4 py-3 rounded-lg bg-chat-input border border-chat-accent/50 focus:outline-none focus:ring-1 focus:ring-chat-accent resize-none"
+                              onKeyDown={(e) => handleEditKeyDown(e, message.id)}
+                              className="w-full px-4 py-3 rounded-2xl bg-chat-input border border-chat-accent/50 focus:outline-none focus:ring-1 focus:ring-chat-accent resize-none"
                               autoFocus
                             />
                             <div className="flex justify-end gap-2">
@@ -2298,15 +2165,181 @@ export default function Home() {
                                 disabled={!editMessageContent.trim() || isLoading}
                                 className="px-3 py-1.5 text-sm rounded-lg bg-chat-accent hover:bg-chat-accent-hover disabled:opacity-50 transition-colors"
                               >
-                                {isLoading ? 'Saving...' : 'Save'}
+                                {isLoading ? 'Sending...' : 'Send'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <div className="px-4 py-3 rounded-2xl bg-chat-accent/20 border border-chat-accent/30">
+                              {message.content}
+                            </div>
+                            {/* Edit button for user messages */}
+                            {message.created_at && (
+                              <div className="text-xs text-chat-muted mt-1 text-right">
+                                {formatTimestamp(message.created_at)}
+                              </div>
+                            )}
+                            <div className="absolute -bottom-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                              <button
+                                onClick={() => handleEditMessage(message)}
+                                disabled={isLoading}
+                                className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                                title="Edit message"
+                              >
+                                <Pencil size={14} />
                               </button>
                             </div>
                           </div>
                         )}
                       </div>
-                    </div>
-                  )}
-                </div>
+                    ) : (
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-chat-accent to-emerald-600 flex items-center justify-center shrink-0 glow-accent">
+                          <Brain size={14} className="text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {message.memory_context && (
+                            <div className="mb-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-chat-accent/10 border border-chat-accent/20 text-xs text-chat-accent">
+                              <Brain size={12} />
+                              {message.memory_context}
+                            </div>
+                          )}
+                          <div className="markdown-content">
+                            {message.isStreaming && !message.content ? (
+                              <div className="flex items-center gap-1">
+                                <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
+                                <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
+                                <div className="w-2 h-2 rounded-full bg-chat-accent typing-dot" />
+                              </div>
+                            ) : (
+                              <ReactMarkdown
+                                components={{
+                                  code({ className, children, ...props }) {
+                                    const match = /language-(\w+)/.exec(className || '');
+                                    const isInline = !match && !className;
+
+                                    if (isInline) {
+                                      return <InlineCode>{children}</InlineCode>;
+                                    }
+
+                                    return (
+                                      <CodeBlock language={match?.[1]}>
+                                        {String(children).replace(/\n$/, '')}
+                                      </CodeBlock>
+                                    );
+                                  },
+                                }}
+                              >
+                                {message.content}
+                              </ReactMarkdown>
+                            )}
+                            {message.isStreaming && message.content && (
+                              <span className="typing-cursor" />
+                            )}
+                          </div>
+                          {message.created_at && (
+                            <div className="text-xs text-chat-muted mt-1">
+                              {formatTimestamp(message.created_at)}
+                            </div>
+                          )}
+                          {/* Action buttons for assistant messages */}
+                          {!message.isStreaming && message.content && (
+                            <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                              <button
+                                onClick={() => handleFeedback(message.id, message.feedback === 'thumbs_up' ? null : 'thumbs_up')}
+                                className={`p-1.5 rounded-md hover:bg-chat-hover transition-colors ${message.feedback === 'thumbs_up'
+                                  ? 'text-green-400 bg-green-400/10'
+                                  : 'text-gray-400 hover:text-green-400'
+                                  }`}
+                                title="Thumbs up"
+                              >
+                                <ThumbsUp size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleFeedback(message.id, message.feedback === 'thumbs_down' ? null : 'thumbs_down')}
+                                className={`p-1.5 rounded-md hover:bg-chat-hover transition-colors ${message.feedback === 'thumbs_down'
+                                  ? 'text-red-400 bg-red-400/10'
+                                  : 'text-gray-400 hover:text-red-400'
+                                  }`}
+                                title="Thumbs down"
+                              >
+                                <ThumbsDown size={14} />
+                              </button>
+                              <div className="w-px h-4 bg-chat-border mx-1" />
+                              <button
+                                onClick={() => copyMessage(message.content, message.id)}
+                                className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors"
+                                title="Copy message"
+                              >
+                                {copiedMessageId === message.id ? (
+                                  <CheckCheck size={14} className="text-green-400" />
+                                ) : (
+                                  <Copy size={14} />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => regenerateResponse(index)}
+                                disabled={isLoading}
+                                className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                                title="Regenerate response"
+                              >
+                                <RefreshCw size={14} />
+                              </button>
+                              {typeof message.id === 'number' && (
+                                <>
+                                  <div className="w-px h-4 bg-chat-border mx-1" />
+                                  <button
+                                    onClick={() => handleEditMessage(message)}
+                                    disabled={isLoading}
+                                    className="p-1.5 rounded-md hover:bg-chat-hover text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                                    title="Edit message"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          {/* Edit mode for assistant messages */}
+                          {editingMessageId === message.id && typeof message.id === 'number' && (
+                            <div className="mt-2 space-y-2">
+                              <textarea
+                                ref={editTextareaRef}
+                                value={editMessageContent}
+                                onChange={(e) => setEditMessageContent(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    submitEditMessage(message.id);
+                                  } else if (e.key === 'Escape') {
+                                    cancelEditMessage();
+                                  }
+                                }}
+                                className="w-full px-4 py-3 rounded-lg bg-chat-input border border-chat-accent/50 focus:outline-none focus:ring-1 focus:ring-chat-accent resize-none"
+                                autoFocus
+                              />
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={cancelEditMessage}
+                                  className="px-3 py-1.5 text-sm rounded-lg hover:bg-chat-hover transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => submitEditMessage(message.id)}
+                                  disabled={!editMessageContent.trim() || isLoading}
+                                  className="px-3 py-1.5 text-sm rounded-lg bg-chat-accent hover:bg-chat-accent-hover disabled:opacity-50 transition-colors"
+                                >
+                                  {isLoading ? 'Saving...' : 'Save'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
               <div ref={messagesEndRef} />
@@ -2329,7 +2362,7 @@ export default function Home() {
                 ))}
               </div>
             )}
-            
+
             <div className="relative flex items-center bg-chat-input rounded-2xl border border-chat-border focus-within:border-chat-accent/50 focus-within:ring-1 focus-within:ring-chat-accent/20 transition-all">
               <div className="flex items-center self-stretch">
                 <FileAttachmentButton
@@ -2355,7 +2388,7 @@ export default function Home() {
                 className="flex-1 bg-transparent py-4 resize-none focus:outline-none max-h-[200px] disabled:opacity-50"
               />
               <div className="flex items-center gap-1 m-2">
-                <VoiceInput 
+                <VoiceInput
                   onTranscript={(text) => setInput(prev => prev + (prev ? ' ' : '') + text)}
                   disabled={isLoading}
                 />
@@ -2373,7 +2406,7 @@ export default function Home() {
               </div>
             </div>
             <p className="text-center text-xs text-chat-muted mt-3">
-              MemoryLLM uses Notion as persistent memory. 
+              MemoryLLM uses Notion as persistent memory.
               <span className="hidden sm:inline"> Press <kbd className="px-1 py-0.5 mx-0.5 rounded bg-chat-hover text-[10px]">⌘K</kbd> for new chat, <kbd className="px-1 py-0.5 mx-0.5 rounded bg-chat-hover text-[10px]">/</kbd> to focus.</span>
             </p>
           </div>
