@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.core.deps import DBSession, CurrentUser
 from app.core.security import verify_password, get_password_hash, encrypt_api_key
 from app.core.exceptions import BadRequestError
-from app.schemas.user import UserUpdate, PasswordChange, UserResponse, NotionApiKeyUpdate, NotionPagesUpdate, NotionPagesUpdate
+from app.schemas.user import UserUpdate, PasswordChange, UserResponse, NotionApiKeyUpdate, NotionPagesUpdate
 
 logger = logging.getLogger(__name__)
 
