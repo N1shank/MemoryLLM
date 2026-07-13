@@ -239,6 +239,7 @@ async def update_message_feedback(
     """
     result = await db.execute(
         select(Message)
+        .options(selectinload(Message.conversation))
         .join(Conversation)
         .where(Message.id == message_id)
     )
@@ -352,6 +353,7 @@ async def edit_message(
     """
     result = await db.execute(
         select(Message)
+        .options(selectinload(Message.conversation))
         .join(Conversation)
         .where(Message.id == message_id)
     )
