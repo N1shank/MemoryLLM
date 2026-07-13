@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.exceptions import TooManyRequestsError
@@ -184,9 +185,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         is_allowed, headers = rate_limiter.is_allowed(key, endpoint, config)
         
         if not is_allowed:
-            raise TooManyRequestsError(
-                detail=f"Rate limit exceeded. Try again in {headers.get('Retry-After', '60')} seconds.",
-                retry_after=int(headers.get("Retry-After", 60)),
+            # Return JSONResponse directly instead of raising HTTPException
+            # because BaseHTTPMiddleware doesn't handle HTTPException properly
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": f"Rate limit exceeded. Try again in {headers.get('Retry-After', '60')} seconds.",
+                    "type": "rate_limit_exceeded",
+                },
+                headers=headers,
             )
         
         # Process request
@@ -197,4 +204,5 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             response.headers[header] = value
         
         return response
+
 
