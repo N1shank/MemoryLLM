@@ -89,8 +89,8 @@ async def chat(
             notion_api_key=current_user.notion_api_key,
         )
     except Exception as e:
-        logger.error(f"Gemini agent error: {e}")
-        raise ServiceUnavailableError(f"AI service error: {str(e)}")
+        logger.error(f"Gemini agent error: {e}", exc_info=True)
+        raise ServiceUnavailableError("AI service is temporarily unavailable. Please try again.")
     
     # Save assistant message
     assistant_message = Message(
@@ -216,8 +216,8 @@ async def chat_stream(
                 yield f"data: {done_data}\n\n"
         
         except Exception as e:
-            logger.error(f"Streaming error: {e}")
-            error_data = json.dumps({"type": "error", "message": str(e)})
+            logger.error(f"Streaming error: {e}", exc_info=True)
+            error_data = json.dumps({"type": "error", "message": "An error occurred while generating the response. Please try again."})
             yield f"data: {error_data}\n\n"
     
     return StreamingResponse(
