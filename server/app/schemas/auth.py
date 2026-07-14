@@ -23,6 +23,7 @@ class UserResponse(BaseModel):
     name: str
     email: str
     username: str
+    notion_api_key_configured: bool = False
 
     class Config:
         from_attributes = True
