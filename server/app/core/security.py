@@ -13,7 +13,7 @@ from app.core.config import settings
 
 def _prehash_password(password: str) -> bytes:
     """Pre-hash password with SHA256 to avoid bcrypt's 72-byte limit."""
-    return hashlib.sha256(password.encode('utf-8')).digest()
+    return hashlib.sha256(password.encode('utf-8')).hexdigest().encode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
