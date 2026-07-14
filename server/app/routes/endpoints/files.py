@@ -1,5 +1,6 @@
 """File upload API endpoints."""
 
+import asyncio
 import os
 import uuid
 import mimetypes
@@ -69,8 +70,7 @@ async def upload_file(
     upload_dir = get_upload_dir()
     file_path = upload_dir / safe_filename
     
-    with open(file_path, "wb") as f:
-        f.write(content)
+    await asyncio.to_thread(file_path.write_bytes, content)
     
     # Get mime type
     mime_type, _ = mimetypes.guess_type(file.filename)
