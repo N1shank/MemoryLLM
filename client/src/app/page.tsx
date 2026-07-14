@@ -472,7 +472,7 @@ export default function Home() {
             const updated = [...prev];
             const lastMsg = updated[updated.length - 1];
             if (lastMsg.role === 'assistant') {
-              lastMsg.content += event.content || '';
+              updated[updated.length - 1] = { ...lastMsg, content: lastMsg.content + (event.content || '') };
             }
             return updated;
           });
@@ -483,9 +483,12 @@ export default function Home() {
             const updated = [...prev];
             const lastMsg = updated[updated.length - 1];
             if (lastMsg.role === 'assistant') {
-              lastMsg.id = event.message_id || lastMsg.id;
-              lastMsg.memory_context = event.memory_context || null;
-              lastMsg.isStreaming = false;
+              updated[updated.length - 1] = {
+                ...lastMsg,
+                id: event.message_id || lastMsg.id,
+                memory_context: event.memory_context || null,
+                isStreaming: false,
+              };
             }
             return updated;
           });
@@ -578,7 +581,7 @@ export default function Home() {
             const updated = [...prev];
             const lastMsg = updated[updated.length - 1];
             if (lastMsg.role === 'assistant') {
-              lastMsg.content += event.content || '';
+              updated[updated.length - 1] = { ...lastMsg, content: lastMsg.content + (event.content || '') };
             }
             return updated;
           });
@@ -589,9 +592,12 @@ export default function Home() {
             const updated = [...prev];
             const lastMsg = updated[updated.length - 1];
             if (lastMsg.role === 'assistant') {
-              lastMsg.id = event.message_id || lastMsg.id;
-              lastMsg.memory_context = event.memory_context || null;
-              lastMsg.isStreaming = false;
+              updated[updated.length - 1] = {
+                ...lastMsg,
+                id: event.message_id || lastMsg.id,
+                memory_context: event.memory_context || null,
+                isStreaming: false,
+              };
             }
             return updated;
           });
