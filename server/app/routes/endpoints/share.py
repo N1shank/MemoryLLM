@@ -1,7 +1,6 @@
 """Conversation sharing API endpoints."""
 
 import secrets
-from datetime import datetime
 
 from fastapi import APIRouter
 from sqlalchemy import select
@@ -12,11 +11,6 @@ from app.core.exceptions import NotFoundError, ForbiddenError
 from app.models.conversation import Conversation, Message
 
 router = APIRouter(prefix="/share", tags=["share"])
-
-
-class SharedConversationResponse:
-    """Response for shared conversation."""
-    pass
 
 
 @router.post("/conversations/{conversation_id}")
