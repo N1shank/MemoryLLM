@@ -107,7 +107,7 @@ async def get_shared_conversation(
         .options(selectinload(Conversation.messages))
         .where(
             Conversation.share_token == share_token,
-            Conversation.is_shared == True,
+            Conversation.is_shared.is_(True),
         )
     )
     conversation = result.scalar_one_or_none()

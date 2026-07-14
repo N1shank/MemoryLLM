@@ -38,7 +38,7 @@ async def list_conversations(
         .outerjoin(Message)
         .where(
             Conversation.user_id == current_user.id,
-            Conversation.is_archived == False
+            Conversation.is_archived.is_(False)
         )
         .group_by(Conversation.id)
         .order_by(Conversation.is_pinned.desc(), Conversation.updated_at.desc())
