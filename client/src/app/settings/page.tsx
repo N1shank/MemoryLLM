@@ -77,10 +77,12 @@ export default function SettingsPage() {
 
       if (Object.keys(updates).length === 0) {
         setProfileError('No changes to save');
+        setProfileLoading(false);
         return;
       }
 
       await userApi.updateProfile(updates);
+      await refreshUser();
       setProfileSuccess(true);
       setTimeout(() => setProfileSuccess(false), 3000);
     } catch (e) {
