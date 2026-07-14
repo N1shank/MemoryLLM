@@ -1,15 +1,14 @@
 """Authentication API endpoints."""
 
-from typing import Annotated
 from sqlalchemy import select, or_
 
-from app.core.deps import DBSession
+from app.core.deps import DBSession, CurrentUser
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.core.exceptions import ConflictError, UnauthorizedError, BadRequestError
 from app.models.user import User
 from app.schemas.auth import UserCreate, UserLogin, Token, UserResponse
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -100,43 +99,16 @@ async def login(credentials: UserLogin, db: DBSession) -> Token:
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(
-    db: DBSession,
-    authorization: Annotated[str | None, Header()] = None,
+    current_user: CurrentUser,
 ) -> UserResponse:
     """
     Get the current authenticated user's profile.
     """
-    from app.core.security import decode_access_token
-    
-    if not authorization:
-        raise UnauthorizedError("Missing authorization header")
-    
-    # Extract token from "Bearer <token>"
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise UnauthorizedError("Invalid authorization header format")
-    
-    token = parts[1]
-    payload = decode_access_token(token)
-    
-    if payload is None:
-        raise UnauthorizedError("Invalid or expired token")
-    
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise UnauthorizedError("Invalid token payload")
-    
-    result = await db.execute(select(User).where(User.id == int(user_id)))
-    user = result.scalar_one_or_none()
-    
-    if user is None:
-        raise UnauthorizedError("User not found")
-    
     return UserResponse(
-        id=user.id,
-        name=user.name,
-        email=user.email,
-        username=user.username,
-        notion_api_key_configured=bool(user.notion_api_key),
+        id=current_user.id,
+        name=current_user.name,
+        email=current_user.email,
+        username=current_user.username,
+        notion_api_key_configured=bool(current_user.notion_api_key),
     )
 
