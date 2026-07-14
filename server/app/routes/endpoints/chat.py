@@ -162,6 +162,10 @@ async def chat_stream(
     
     conversation_id = conversation.id
     
+    # Capture user's notion_api_key before the response starts, because
+    # the DB session will be closed by the time the generator runs
+    user_notion_api_key = current_user.notion_api_key
+    
     # Build conversation history
     history = []
     if request.conversation_id and conversation.messages:
@@ -177,7 +181,7 @@ async def chat_stream(
             async for chunk, context in gemini_agent.chat_stream(
                 message=request.message,
                 conversation_history=history,
-                notion_api_key=current_user.notion_api_key,
+                notion_api_key=user_notion_api_key,
             ):
                 full_response += chunk
                 if context:
