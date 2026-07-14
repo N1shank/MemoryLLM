@@ -89,7 +89,8 @@ def decrypt_api_key(encrypted_key: str) -> str:
         f = Fernet(_get_encryption_key())
         decrypted = f.decrypt(encrypted_key.encode())
         return decrypted.decode()
-    except Exception:
-        # If decryption fails, return empty string
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to decrypt API key: {e}")
         return ""
 
