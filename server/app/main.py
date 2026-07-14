@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -10,7 +11,7 @@ from fastapi.responses import JSONResponse
 from app.routes.router import router as api_router
 from app.core.config import settings
 from app.core.database import init_db
-from app.core.rate_limit import RateLimitMiddleware
+from app.core.rate_limit import RateLimitMiddleware, rate_limiter
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +21,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _periodic_rate_limit_cleanup():
+    """Periodically clean up stale rate limiter buckets."""
+    while True:
+        await asyncio.sleep(1800)  # Every 30 minutes
+        rate_limiter.cleanup_old_buckets()
+        logger.debug("Rate limiter stale buckets cleaned up")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
@@ -27,8 +36,10 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     await init_db()
     logger.info("Database initialized successfully")
+    cleanup_task = asyncio.create_task(_periodic_rate_limit_cleanup())
     yield
     # Shutdown
+    cleanup_task.cancel()
     logger.info("Application shutting down...")
 
 
