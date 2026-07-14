@@ -86,9 +86,12 @@ async def upload_file(
 
 
 @router.get("/{filename}")
-async def get_file(filename: str) -> FileResponse:
+async def get_file(
+    filename: str,
+    current_user: CurrentUser,
+) -> FileResponse:
     """
-    Retrieve an uploaded file.
+    Retrieve an uploaded file. Requires authentication.
     """
     # Sanitize filename to prevent directory traversal
     safe_filename = Path(filename).name
