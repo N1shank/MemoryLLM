@@ -117,6 +117,7 @@ export default function Home() {
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
 
   // Tags
   const [editingTags, setEditingTags] = useState<number | null>(null);
@@ -1604,9 +1605,9 @@ export default function Home() {
                         key={folder.id}
                         className="flex items-center gap-2 px-2 py-1 rounded hover:bg-chat-hover text-xs text-chat-muted cursor-pointer"
                         onClick={() => {
-                          // Filter conversations by folder
-                          // This could be enhanced to show only conversations in this folder
+                          setSelectedFolderId(selectedFolderId === folder.id ? null : folder.id);
                         }}
+                        style={{ backgroundColor: selectedFolderId === folder.id ? 'var(--chat-hover)' : 'transparent' }}
                       >
                         <FileText size={12} />
                         <span className="flex-1 truncate">{folder.name}</span>
@@ -1682,14 +1683,16 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          ) : conversations.length === 0 ? (
+          ) : (selectedFolderId ? conversations.filter(c => c.folder_id === selectedFolderId) : conversations).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-chat-accent/20 to-emerald-600/20 flex items-center justify-center mb-4">
                 <MessageSquare size={32} className="text-chat-accent" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">No conversations yet</h3>
+              <h3 className="text-lg font-semibold mb-2">
+                {selectedFolderId ? "No conversations in this folder" : "No conversations yet"}
+              </h3>
               <p className="text-sm text-chat-muted mb-4 max-w-xs">
-                Start a new conversation to begin chatting with your AI assistant
+                {selectedFolderId ? "Move conversations to this folder to see them here" : "Start a new conversation to begin chatting with your AI assistant"}
               </p>
               <button
                 onClick={createNewConversation}
@@ -1700,7 +1703,7 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            conversations.map(conv => (
+            (selectedFolderId ? conversations.filter(c => c.folder_id === selectedFolderId) : conversations).map(conv => (
               <div
                 key={conv.id}
                 className={`group relative mb-1 rounded-lg transition-colors ${conv.id === currentConversationId
