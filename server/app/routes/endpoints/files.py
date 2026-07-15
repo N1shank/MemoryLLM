@@ -7,7 +7,7 @@ import mimetypes
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import FileResponse
 
 from app.core.deps import CurrentUser
