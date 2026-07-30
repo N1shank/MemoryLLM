@@ -63,6 +63,35 @@ def decode_access_token(token: str) -> dict[str, Any] | None:
         return None
 
 
+def create_refresh_token(data: dict[str, Any]) -> str:
+    """Create a JWT refresh token."""
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    
+    to_encode.update({"exp": expire, "type": "refresh"})
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+    return encoded_jwt
+
+
+def decode_refresh_token(token: str) -> dict[str, Any] | None:
+    """Decode and verify a JWT refresh token."""
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+        if payload.get("type") != "refresh":
+            return None
+        return payload
+    except JWTError:
+        return None
+
+
 def _get_encryption_key() -> bytes:
     """Get encryption key from JWT secret."""
     # Use SHA256 hash of JWT secret as key (32 bytes for Fernet)

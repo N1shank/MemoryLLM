@@ -3,10 +3,10 @@
 from sqlalchemy import select, or_
 
 from app.core.deps import DBSession, CurrentUser
-from app.core.security import verify_password, get_password_hash, create_access_token
+from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_refresh_token
 from app.core.exceptions import ConflictError, UnauthorizedError, BadRequestError
 from app.models.user import User
-from app.schemas.auth import UserCreate, UserLogin, Token, UserResponse
+from app.schemas.auth import UserCreate, UserLogin, Token, UserResponse, RefreshRequest
 
 from fastapi import APIRouter
 
@@ -47,9 +47,11 @@ async def signup(user_data: UserCreate, db: DBSession) -> Token:
     
     # Create access token
     access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
     return Token(
         access_token=access_token,
+        refresh_token=refresh_token,
         user=UserResponse(
             id=user.id,
             name=user.name,
@@ -84,9 +86,46 @@ async def login(credentials: UserLogin, db: DBSession) -> Token:
     
     # Create access token
     access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
     return Token(
         access_token=access_token,
+        refresh_token=refresh_token,
+        user=UserResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            username=user.username,
+            notion_api_key_configured=bool(user.notion_api_key),
+        ),
+    )
+
+
+@router.post("/refresh", response_model=Token)
+async def refresh_token(request: RefreshRequest, db: DBSession) -> Token:
+    """
+    Refresh an access token using a refresh token.
+    """
+    payload = decode_refresh_token(request.refresh_token)
+    if not payload or "sub" not in payload:
+        raise UnauthorizedError("Invalid or expired refresh token")
+    
+    user_id = payload.get("sub")
+    if not user_id:
+        raise UnauthorizedError("Invalid refresh token")
+        
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise UnauthorizedError("User not found")
+        
+    access_token = create_access_token(data={"sub": str(user.id)})
+    new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    
+    return Token(
+        access_token=access_token,
+        refresh_token=new_refresh_token,
         user=UserResponse(
             id=user.id,
             name=user.name,
