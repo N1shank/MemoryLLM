@@ -101,7 +101,7 @@ export function AttachmentPreview({ file, onRemove }: AttachmentPreviewProps) {
           {file.original_name}
         </p>
         <p className="text-xs text-chat-muted">
-          {formatFileSize(file.size)}
+          {formatFileSize(file.size || file.file_size || 0)}
         </p>
       </div>
       

@@ -336,7 +336,7 @@ export default function Home() {
 
     try {
       const conv = await conversationsApi.get(id);
-      setMessages(conv.messages.map(m => ({
+      setMessages(conv.messages.map((m: any) => ({
         ...m,
         feedback: m.feedback || null,
         created_at: m.created_at,
@@ -541,12 +541,12 @@ export default function Home() {
     if (pendingAttachments.length > 0) {
       for (const file of pendingAttachments) {
         attachments.push({
-          url: file.url,
-          filename: file.original_name,
-          isImage: file.is_image,
+          url: file.url || '',
+          filename: file.original_name || file.filename,
+          isImage: file.is_image || false,
         });
         // Add file reference to message for AI context
-        content += `\n[Attached file: ${file.original_name}]`;
+        content += `\n[Attached file: ${file.original_name || file.filename}]`;
       }
     }
 
@@ -1793,7 +1793,7 @@ export default function Home() {
                       {menuOpenId === conv.id && (
                         <div className="absolute right-0 top-full mt-1 bg-chat-sidebar border border-chat-border rounded-lg shadow-xl py-1 min-w-[120px] z-10">
                           <button
-                            onClick={() => handleTogglePin(conv.id, conv.is_pinned)}
+                            onClick={() => handleTogglePin(conv.id, conv.is_pinned || false)}
                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
                           >
                             {conv.is_pinned ? (
@@ -1857,7 +1857,7 @@ export default function Home() {
                             Edit tags
                           </button>
                           <button
-                            onClick={() => handleToggleArchive(conv.id, conv.is_archived)}
+                            onClick={() => handleToggleArchive(conv.id, conv.is_archived || false)}
                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-chat-hover text-sm"
                           >
                             <Archive size={14} />

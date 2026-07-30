@@ -20,7 +20,7 @@ function SharedConversationContent() {
   useEffect(() => {
     async function loadConversation() {
       try {
-        const data = await shareApi.getSharedConversation(token);
+        const data = await shareApi.get(token);
         setConversation(data);
       } catch (e) {
         setError(e instanceof ApiClientError ? e.message : 'Failed to load conversation');
