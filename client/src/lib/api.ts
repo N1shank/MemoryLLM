@@ -288,12 +288,12 @@ export const filesApi = {
 
 // User API
 export const userApi = {
-  getSettings: () => request('/api/v1/user/settings'),
-  updateSettings: (data: any) => request('/api/v1/user/settings', { method: 'PUT', body: JSON.stringify(data) }),
-  updateProfile: (data: any) => request('/api/v1/user/profile', { method: 'PUT', body: JSON.stringify(data) }),
-  changePassword: (current_password: string, new_password: string) => request('/api/v1/user/password', { method: 'PUT', body: JSON.stringify({ current_password, new_password }) }),
-  updateNotionApiKey: (api_key: string | null) => request('/api/v1/user/notion-key', { method: 'PUT', body: JSON.stringify({ api_key }) }),
-  validateNotionApiKey: (api_key: string) => request('/api/v1/user/notion-key/validate', { method: 'POST', body: JSON.stringify({ api_key }) }),
-  deleteAccount: () => request('/api/v1/user/account', { method: 'DELETE' }),
-  updateNotionPages: (pages: any[]) => request('/api/v1/user/notion-pages', { method: 'PUT', body: JSON.stringify({ pages }) }),
+  getSettings: () => request('/api/v1/users/me/settings'),
+  updateSettings: (data: any) => request('/api/v1/users/me/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+  updateProfile: (data: any) => request('/api/v1/users/me', { method: 'PATCH', body: JSON.stringify(data) }),
+  changePassword: (current_password: string, new_password: string) => request('/api/v1/users/me/password', { method: 'POST', body: JSON.stringify({ current_password, new_password }) }),
+  updateNotionApiKey: (api_key: string | null) => request('/api/v1/users/me/notion-api-key', { method: 'POST', body: JSON.stringify({ api_key }) }),
+  validateNotionApiKey: (api_key: string) => request('/api/v1/users/me/notion-api-key/validate', { method: 'POST', body: JSON.stringify({ api_key }) }),
+  deleteAccount: () => request('/api/v1/users/me', { method: 'DELETE' }),
+  updateNotionPages: (pages: any[]) => request('/api/v1/users/me/notion-pages', { method: 'POST', body: JSON.stringify({ pages }) }),
 };
