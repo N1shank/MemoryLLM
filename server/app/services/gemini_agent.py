@@ -6,11 +6,12 @@ import logging
 from typing import AsyncGenerator
 
 from google import genai
-from google.api_core import exceptions as google_exceptions
+from google.genai import errors as google_exceptions
 
 from app.core.config import settings
 from app.core.security import decrypt_api_key
 from app.services.notion_mcp import create_notion_client
+from app.services.web_search import get_web_search_tool, execute_web_search
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,12 @@ You can use the Notion tools to:
 When the user shares important information (preferences, facts, context about themselves or their work), 
 proactively save it to Notion so you can recall it later.
 
-When answering questions, first check if you have relevant information stored in Notion.
+You also have access to a web_search tool.
+If the user asks a factual question, requests research, or asks about recent events:
+1. Use web_search to find the latest information.
+2. If the user wants to save this research, or if you think it's important, create a Notion page with your findings.
+
+When answering questions, first check if you have relevant information stored in Notion, or search the web if it's general knowledge.
 
 Be helpful, concise, and make good use of your memory capabilities."""
 
@@ -86,8 +92,15 @@ class GeminiAgent:
 
                 # Convert tools if available
                 tools_config = None
+                gemini_tools = []
                 if notion_tools:
-                    tools_config = self._convert_to_gemini_tools(notion_tools)
+                    gemini_tools.extend(self._convert_to_gemini_tools(notion_tools)["function_declarations"])
+                
+                # Add Web Search tool
+                gemini_tools.append(get_web_search_tool())
+                
+                if gemini_tools:
+                    tools_config = {"function_declarations": gemini_tools}
 
                 # Get client (use async client if available)
                 client = self._get_client()
@@ -134,7 +147,7 @@ class GeminiAgent:
                 if response.text:
                     return response.text, "Notion unavailable"
                 return "I apologize, but I couldn't generate a response.", None
-            except google_exceptions.ResourceExhausted as e:
+            except google_exceptions.APIError as e:
                 error_msg = self._handle_rate_limit_error(e)
                 logger.error(f"Rate limit error in fallback: {e}")
                 return error_msg, None
@@ -179,9 +192,15 @@ class GeminiAgent:
                             "parts": [{"text": msg["content"]}],
                         })
 
-                    tools_config = None
+                    gemini_tools = []
                     if notion_tools:
-                        tools_config = self._convert_to_gemini_tools(notion_tools)
+                        gemini_tools.extend(self._convert_to_gemini_tools(notion_tools)["function_declarations"])
+                        
+                    gemini_tools.append(get_web_search_tool())
+                    
+                    tools_config = None
+                    if gemini_tools:
+                        tools_config = {"function_declarations": gemini_tools}
 
                     full_message = f"{SYSTEM_PROMPT}\n\nUser: {message}"
                     contents.append({
@@ -239,7 +258,7 @@ class GeminiAgent:
                         "max_output_tokens": 2048,
                     }
                 )
-            except google_exceptions.ResourceExhausted as e:
+            except google_exceptions.APIError as e:
                 error_msg = self._handle_rate_limit_error(e)
                 yield error_msg, "Notion unavailable"
                 return
@@ -374,7 +393,7 @@ class GeminiAgent:
                     contents=current_contents,
                     config=request_config,
                 )
-            except google_exceptions.ResourceExhausted as e:
+            except google_exceptions.APIError as e:
                 error_msg = self._handle_rate_limit_error(e)
                 logger.error(f"Rate limit error: {e}")
                 return error_msg, memory_actions
@@ -426,7 +445,11 @@ class GeminiAgent:
                         func_name = str(fc)
                         func_args = {}
                     
-                    result = await mcp_client.call_tool(func_name, func_args)
+                    if func_name == "web_search":
+                        result = await execute_web_search(**func_args)
+                    else:
+                        result = await mcp_client.call_tool(func_name, func_args)
+                        
                     function_responses.append({
                         "name": func_name,
                         "response": {"result": result},
@@ -436,6 +459,8 @@ class GeminiAgent:
                     action_desc = f"📝 {func_name}"
                     if "search" in func_name.lower():
                         action_desc = f"🔍 Searched Notion"
+                        if func_name == "web_search":
+                            action_desc = f"🌐 Searched Web"
                     elif "create" in func_name.lower():
                         action_desc = f"✏️ Created in Notion"
                     elif "update" in func_name.lower():
