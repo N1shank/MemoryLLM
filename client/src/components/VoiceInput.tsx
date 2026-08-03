@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Mic, MicOff, Square } from 'lucide-react';
+import { Mic, MicOff, Brain, Save } from 'lucide-react';
 
 interface VoiceInputProps {
   onTranscript: (text: string) => void;
   disabled?: boolean;
+  isBrainDump?: boolean;
 }
 
-export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
+export function VoiceInput({ onTranscript, disabled, isBrainDump = false }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
@@ -95,11 +96,11 @@ export function VoiceInput({ onTranscript, disabled }: VoiceInputProps) {
     >
       {isListening ? (
         <div className="relative">
-          <MicOff size={20} />
-          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 animate-ping" />
+          {isBrainDump ? <Brain size={20} className="animate-pulse text-purple-400" /> : <MicOff size={20} />}
+          <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full animate-ping ${isBrainDump ? 'bg-purple-500' : 'bg-red-500'}`} />
         </div>
       ) : (
-        <Mic size={20} />
+        isBrainDump ? <Brain size={20} className="text-purple-400/70 hover:text-purple-400" /> : <Mic size={20} />
       )}
     </button>
   );

@@ -2372,7 +2372,14 @@ export default function Home() {
               </div>
             )}
 
-            <div className="relative flex items-center bg-chat-input rounded-2xl border border-chat-border focus-within:border-chat-accent/50 focus-within:ring-1 focus-within:ring-chat-accent/20 transition-all">
+            <form 
+              id="send-message-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                sendMessage();
+              }}
+              className="relative flex items-center bg-chat-input rounded-2xl border border-chat-border focus-within:border-chat-accent/50 focus-within:ring-1 focus-within:ring-chat-accent/20 transition-all"
+            >
               <div className="flex items-center self-stretch">
                 <FileAttachmentButton
                   onFileUploaded={(file) => setPendingAttachments(prev => [...prev, file])}
@@ -2401,6 +2408,19 @@ export default function Home() {
                   onTranscript={(text) => setInput(prev => prev + (prev ? ' ' : '') + text)}
                   disabled={isLoading}
                 />
+                <VoiceInput
+                  isBrainDump={true}
+                  onTranscript={(text) => {
+                    const dumpText = `Please save this Brain Dump to a new Notion page:\n\n${text}`;
+                    setInput(dumpText);
+                    // Send it directly using a timeout to allow state to settle
+                    setTimeout(() => {
+                      const event = new Event('submit', { bubbles: true, cancelable: true });
+                      document.getElementById('send-message-form')?.dispatchEvent(event);
+                    }, 100);
+                  }}
+                  disabled={isLoading}
+                />
                 <button
                   onClick={sendMessage}
                   disabled={(!input.trim() && pendingAttachments.length === 0) || isLoading}
@@ -2413,7 +2433,7 @@ export default function Home() {
                   )}
                 </button>
               </div>
-            </div>
+            </form>
             <p className="text-center text-xs text-chat-muted mt-3">
               MemoryLLM uses Notion as persistent memory.
               <span className="hidden sm:inline"> Press <kbd className="px-1 py-0.5 mx-0.5 rounded bg-chat-hover text-[10px]">⌘K</kbd> for new chat, <kbd className="px-1 py-0.5 mx-0.5 rounded bg-chat-hover text-[10px]">/</kbd> to focus.</span>
