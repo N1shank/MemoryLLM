@@ -11,6 +11,7 @@ from app.routes.endpoints.share import router as share_router
 from app.routes.endpoints.templates import router as templates_router
 from app.routes.endpoints.folders import router as folders_router
 from app.routes.endpoints.drafts import router as drafts_router
+from app.routes.endpoints.notion import router as notion_router
 
 router = APIRouter()
 
@@ -26,3 +27,4 @@ router.include_router(share_router)
 router.include_router(templates_router)
 router.include_router(folders_router)
 router.include_router(drafts_router)
+router.include_router(notion_router)

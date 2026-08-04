@@ -66,6 +66,12 @@ async def chat(
         db.add(conversation)
         await db.flush()  # Get the ID without committing
     
+    # Build conversation history for the agent
+    history = []
+    if request.conversation_id and conversation.messages:
+        for msg in conversation.messages:
+            history.append({"role": msg.role, "content": msg.content})
+
     # Save user message
     user_message = Message(
         conversation_id=conversation.id,
@@ -74,12 +80,6 @@ async def chat(
     )
     db.add(user_message)
     await db.flush()
-    
-    # Build conversation history for the agent
-    history = []
-    if request.conversation_id and conversation.messages:
-        for msg in conversation.messages:
-            history.append({"role": msg.role, "content": msg.content})
     
     # Get AI response
     try:
@@ -150,6 +150,12 @@ async def chat_stream(
         db.add(conversation)
         await db.flush()
     
+    # Build conversation history
+    history = []
+    if request.conversation_id and conversation.messages:
+        for msg in conversation.messages:
+            history.append({"role": msg.role, "content": msg.content})
+
     # Save user message
     user_message = Message(
         conversation_id=conversation.id,
@@ -165,12 +171,6 @@ async def chat_stream(
     # Capture user's notion_api_key before the response starts, because
     # the DB session will be closed by the time the generator runs
     user_notion_api_key = current_user.notion_api_key
-    
-    # Build conversation history
-    history = []
-    if request.conversation_id and conversation.messages:
-        for msg in conversation.messages[:-1]:  # Exclude the message we just added
-            history.append({"role": msg.role, "content": msg.content})
     
     async def generate_stream() -> AsyncGenerator[str, None]:
         """Generate SSE stream of response tokens."""
@@ -244,7 +244,6 @@ async def update_message_feedback(
     result = await db.execute(
         select(Message)
         .options(selectinload(Message.conversation))
-        .join(Conversation)
         .where(Message.id == message_id)
     )
     message = result.scalar_one_or_none()
@@ -358,7 +357,6 @@ async def edit_message(
     result = await db.execute(
         select(Message)
         .options(selectinload(Message.conversation))
-        .join(Conversation)
         .where(Message.id == message_id)
     )
     message = result.scalar_one_or_none()

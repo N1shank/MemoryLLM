@@ -83,11 +83,9 @@ class GeminiAgent:
                         "parts": [{"text": msg["content"]}],
                     })
 
-                # Add system instruction and current message
-                full_message = f"{SYSTEM_PROMPT}\n\nUser: {message}"
                 contents.append({
                     "role": "user",
-                    "parts": [{"text": full_message}],
+                    "parts": [{"text": message}],
                 })
 
                 # Convert tools if available
@@ -130,7 +128,7 @@ class GeminiAgent:
                 
                 contents.append({
                     "role": "user",
-                    "parts": [{"text": f"{SYSTEM_PROMPT}\n\n(Note: Notion memory is currently unavailable)\n\nUser: {message}"}],
+                    "parts": [{"text": f"(Note: Notion memory is currently unavailable)\n\n{message}"}],
                 })
                 
                 client = self._get_client()
@@ -141,6 +139,7 @@ class GeminiAgent:
                     config={
                         "temperature": 0.7,
                         "max_output_tokens": 2048,
+                        "system_instruction": SYSTEM_PROMPT,
                     }
                 )
                 
@@ -202,10 +201,9 @@ class GeminiAgent:
                     if gemini_tools:
                         tools_config = {"function_declarations": gemini_tools}
 
-                    full_message = f"{SYSTEM_PROMPT}\n\nUser: {message}"
                     contents.append({
                         "role": "user",
-                        "parts": [{"text": full_message}],
+                        "parts": [{"text": message}],
                     })
                     
                     # First, handle any tool calls (non-streaming)
@@ -218,17 +216,7 @@ class GeminiAgent:
                     if memory_actions:
                         memory_context = " | ".join(memory_actions)
                     
-                    # Stream the final response
-                    # Since Gemini's streaming with tools is complex,
-                    # we simulate streaming by chunking the response
-                    words = response.split()
-                    chunk_size = 3  # Send 3 words at a time
-                    
-                    for i in range(0, len(words), chunk_size):
-                        chunk = " ".join(words[i:i + chunk_size])
-                        if i > 0:
-                            chunk = " " + chunk
-                        yield chunk, memory_context if i == 0 else None
+                    yield response, memory_context
                     return
             except Exception as notion_error:
                 logger.warning(f"Notion connection failed, falling back to direct Gemini: {notion_error}")
@@ -244,7 +232,7 @@ class GeminiAgent:
             
             contents.append({
                 "role": "user",
-                "parts": [{"text": f"{SYSTEM_PROMPT}\n\n(Note: Notion memory is currently unavailable)\n\nUser: {message}"}],
+                "parts": [{"text": f"(Note: Notion memory is currently unavailable)\n\n{message}"}],
             })
             
             client = self._get_client()
@@ -256,6 +244,7 @@ class GeminiAgent:
                     config={
                         "temperature": 0.7,
                         "max_output_tokens": 2048,
+                        "system_instruction": SYSTEM_PROMPT,
                     }
                 )
             except google_exceptions.APIError as e:
@@ -270,15 +259,7 @@ class GeminiAgent:
             
             if response.text:
                 response_text = response.text
-                # Stream the response
-                words = response_text.split()
-                chunk_size = 3
-                
-                for i in range(0, len(words), chunk_size):
-                    chunk = " ".join(words[i:i + chunk_size])
-                    if i > 0:
-                        chunk = " " + chunk
-                    yield chunk, "Notion unavailable" if i == 0 else None
+                yield response_text, "Notion unavailable"
             else:
                 yield "I apologize, but I couldn't generate a response.", None
         
@@ -376,6 +357,7 @@ class GeminiAgent:
         config = {
             "temperature": 0.7,
             "max_output_tokens": 2048,
+            "system_instruction": SYSTEM_PROMPT,
         }
         
         current_contents = contents.copy()
@@ -430,6 +412,15 @@ class GeminiAgent:
                     return "".join(text_parts), memory_actions
                 return "I apologize, but I couldn't generate a response.", memory_actions
             
+            # Add model's original function call response to contents BEFORE function responses
+            if hasattr(response, 'candidates') and response.candidates and hasattr(response.candidates[0], 'content'):
+                current_contents.append(response.candidates[0].content)
+            elif function_calls:
+                current_contents.append({
+                    "role": "model",
+                    "parts": [{"function_call": fc} for fc in function_calls]
+                })
+
             # Execute function calls
             function_responses = []
             for fc in function_calls:
@@ -480,7 +471,7 @@ class GeminiAgent:
             # Add function response to contents for next iteration
             for fr in function_responses:
                 current_contents.append({
-                    "role": "model",
+                    "role": "user",
                     "parts": [{
                         "function_response": {
                             "name": fr["name"],

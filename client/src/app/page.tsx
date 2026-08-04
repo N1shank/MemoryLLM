@@ -448,7 +448,7 @@ export default function Home() {
       isStreaming: true,
     };
 
-    setMessages([...existingMessages, userMessage, assistantMessage]);
+    setMessages(prev => [...prev, userMessage, assistantMessage]);
     setIsLoading(true);
 
     // Clear draft when sending message (async, don't block)
@@ -521,8 +521,11 @@ export default function Home() {
         const updated = [...prev];
         const lastMsg = updated[updated.length - 1];
         if (lastMsg.role === 'assistant' && lastMsg.isStreaming) {
-          lastMsg.content = 'Sorry, I encountered an error. Please try again.';
-          lastMsg.isStreaming = false;
+          updated[updated.length - 1] = {
+            ...lastMsg,
+            content: 'Sorry, I encountered an error. Please try again.',
+            isStreaming: false
+          };
         }
         return updated;
       });
@@ -570,7 +573,7 @@ export default function Home() {
       isStreaming: true,
     };
 
-    setMessages([...messages, userMessage, assistantMessage]);
+    setMessages(prev => [...prev, userMessage, assistantMessage]);
     setIsLoading(true);
 
     try {
@@ -630,8 +633,11 @@ export default function Home() {
         const updated = [...prev];
         const lastMsg = updated[updated.length - 1];
         if (lastMsg.role === 'assistant' && lastMsg.isStreaming) {
-          lastMsg.content = 'Sorry, I encountered an error. Please try again.';
-          lastMsg.isStreaming = false;
+          updated[updated.length - 1] = {
+            ...lastMsg,
+            content: 'Sorry, I encountered an error. Please try again.',
+            isStreaming: false
+          };
         }
         return updated;
       });
@@ -1882,11 +1888,15 @@ export default function Home() {
 
         <div className="p-3 border-t border-chat-border space-y-2">
           {user?.notion_api_key_configured ? (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
+            <Link
+              href="/memory"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors group"
+            >
               <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
               <Brain size={16} className="text-green-400" />
               <span className="text-green-400 text-sm font-medium">Notion Memory Active</span>
-            </div>
+              <span className="ml-auto text-xs text-green-400 opacity-0 group-hover:opacity-100 transition-opacity">Manage</span>
+            </Link>
           ) : (
             <Link
               href="/settings"

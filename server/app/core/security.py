@@ -121,5 +121,5 @@ def decrypt_api_key(encrypted_key: str) -> str:
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Failed to decrypt API key: {e}")
-        return ""
+        raise ValueError("Failed to decrypt API key") from e
 

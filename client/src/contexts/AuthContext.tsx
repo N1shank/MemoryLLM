@@ -51,13 +51,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         // Verify token is still valid
         try {
-          const user = await authApi.getMe();
+          const freshUser = await authApi.getMe();
           console.log('[AuthContext] Token verification successful', {
-            user: user.username,
-            notion_api_key_configured: user.notion_api_key_configured
+            user: freshUser.username,
+            notion_api_key_configured: freshUser.notion_api_key_configured
           });
-          setUser(user);
-          setStoredUser(user);
+          setUser(freshUser);
+          setStoredUser(freshUser);
         } catch (e) {
           // Only clear auth state if token is actually invalid (401)
           // For other errors (network, server issues), keep user logged in
@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await authApi.login({ username, password });
       // Set token and user synchronously before anything else
-      setAuthToken(response.access_token);
+      setAuthToken(response.access_token, response.refresh_token);
       setStoredUser(response.user);
       setUser(response.user);
       // Small delay to ensure state propagation
@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     try {
       const response = await authApi.signup({ name, email, username, password });
-      setAuthToken(response.access_token);
+      setAuthToken(response.access_token, response.refresh_token);
       setStoredUser(response.user);
       setUser(response.user);
     } catch (e) {
