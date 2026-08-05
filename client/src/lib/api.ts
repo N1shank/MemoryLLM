@@ -297,3 +297,8 @@ export const userApi = {
   deleteAccount: () => request('/api/v1/users/me', { method: 'DELETE' }),
   updateNotionPages: (pages: any[]) => request('/api/v1/users/me/notion-pages', { method: 'POST', body: JSON.stringify({ pages }) }),
 };
+
+// Notion API
+export const notionApi = {
+  search: () => request('/api/v1/notion/search', { method: 'POST' }),
+};
