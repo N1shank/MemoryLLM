@@ -123,7 +123,7 @@ async def delete_file(
     if not file_path.exists():
         raise NotFoundError("File not found")
     
-    os.remove(file_path)
+    await asyncio.to_thread(os.remove, file_path)
     
     return {"message": "File deleted successfully"}
 

@@ -27,12 +27,11 @@ async_session = async_sessionmaker(
 
 async def get_db() -> AsyncSession:
     """Dependency to get database session."""
-    async with async_session() as session:
-        try:
-            yield session
-        except Exception:
-            await session.rollback()
-            raise
+    session = async_session()
+    try:
+        yield session
+    finally:
+        await session.close()
 
 
 async def init_db():

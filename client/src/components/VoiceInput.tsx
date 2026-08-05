@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Mic, MicOff, Brain, Save } from 'lucide-react';
 
 interface VoiceInputProps {
@@ -13,6 +13,11 @@ export function VoiceInput({ onTranscript, disabled, isBrainDump = false }: Voic
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
+  const onTranscriptRef = useRef(onTranscript);
+
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+  }, [onTranscript]);
 
   useEffect(() => {
     // Check if browser supports speech recognition
@@ -44,7 +49,7 @@ export function VoiceInput({ onTranscript, disabled, isBrainDump = false }: Voic
       }
 
       if (finalTranscript) {
-        onTranscript(finalTranscript);
+        onTranscriptRef.current(finalTranscript);
       }
     };
 
@@ -62,7 +67,7 @@ export function VoiceInput({ onTranscript, disabled, isBrainDump = false }: Voic
       recognition.onerror = null;
       recognition.onend = null;
     };
-  }, [recognition, onTranscript]);
+  }, [recognition]);
 
   const toggleListening = useCallback(() => {
     if (!recognition) return;

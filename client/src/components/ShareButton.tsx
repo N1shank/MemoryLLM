@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Share2, Link, Check, Loader2, X, Globe, Lock } from 'lucide-react';
 import { shareApi, ShareStatus, ApiClientError } from '@/lib/api';
 
@@ -20,9 +20,9 @@ export function ShareButton({ conversationId }: ShareButtonProps) {
     if (isOpen && !status) {
       loadStatus();
     }
-  }, [isOpen]);
+  }, [isOpen, status, loadStatus]);
 
-  const loadStatus = async () => {
+  const loadStatus = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -33,7 +33,7 @@ export function ShareButton({ conversationId }: ShareButtonProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [conversationId]);
 
   const toggleSharing = async () => {
     setIsToggling(true);

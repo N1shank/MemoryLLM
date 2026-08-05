@@ -1,8 +1,10 @@
 """Rate limiting middleware and utilities."""
 
 import time
+import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
+from threading import Lock
 from typing import Callable
 
 from fastapi import Request, Response
@@ -36,6 +38,18 @@ class RateLimiter:
     def __init__(self):
         # Store buckets per key (IP or user ID)
         self._buckets: dict[str, dict[str, TokenBucket]] = defaultdict(dict)
+        self._lock = Lock()
+        self._cleanup_task_started = False
+        
+    def start_cleanup_task(self) -> None:
+        if not self._cleanup_task_started:
+            self._cleanup_task_started = True
+            asyncio.create_task(self._cleanup_loop())
+            
+    async def _cleanup_loop(self) -> None:
+        while True:
+            await asyncio.sleep(3600)
+            self.cleanup_old_buckets()
     
     def _get_bucket(self, key: str, endpoint: str, config: RateLimitConfig) -> TokenBucket:
         """Get or create a token bucket for the given key and endpoint."""
@@ -62,45 +76,47 @@ class RateLimiter:
         Returns:
             tuple of (is_allowed, headers_dict)
         """
-        bucket = self._get_bucket(key, endpoint, config)
-        self._refill_tokens(bucket, config)
-        
-        headers = {
-            "X-RateLimit-Limit": str(config.requests),
-            "X-RateLimit-Remaining": str(max(0, int(bucket.tokens) - 1)),
-            "X-RateLimit-Reset": str(int(bucket.last_update + config.window)),
-        }
-        
-        if bucket.tokens >= 1:
-            bucket.tokens -= 1
-            return True, headers
-        
-        # Calculate retry after
-        rate = config.requests / config.window
-        retry_after = int((1 - bucket.tokens) / rate) + 1
-        headers["Retry-After"] = str(retry_after)
-        
-        return False, headers
+        with self._lock:
+            bucket = self._get_bucket(key, endpoint, config)
+            self._refill_tokens(bucket, config)
+            
+            headers = {
+                "X-RateLimit-Limit": str(config.requests),
+                "X-RateLimit-Remaining": str(max(0, int(bucket.tokens) - 1)),
+                "X-RateLimit-Reset": str(int(bucket.last_update + config.window)),
+            }
+            
+            if bucket.tokens >= 1:
+                bucket.tokens -= 1
+                return True, headers
+            
+            # Calculate retry after
+            rate = config.requests / config.window
+            retry_after = int((1 - bucket.tokens) / rate) + 1
+            headers["Retry-After"] = str(retry_after)
+            
+            return False, headers
     
     def cleanup_old_buckets(self, max_age: int = 3600) -> None:
         """Remove buckets that haven't been used in a while."""
         now = time.time()
         keys_to_remove = []
         
-        for key, endpoints in self._buckets.items():
-            endpoints_to_remove = []
-            for endpoint, bucket in endpoints.items():
-                if now - bucket.last_update > max_age:
-                    endpoints_to_remove.append(endpoint)
+        with self._lock:
+            for key, endpoints in self._buckets.items():
+                endpoints_to_remove = []
+                for endpoint, bucket in endpoints.items():
+                    if now - bucket.last_update > max_age:
+                        endpoints_to_remove.append(endpoint)
+                
+                for endpoint in endpoints_to_remove:
+                    del endpoints[endpoint]
+                
+                if not endpoints:
+                    keys_to_remove.append(key)
             
-            for endpoint in endpoints_to_remove:
-                del endpoints[endpoint]
-            
-            if not endpoints:
-                keys_to_remove.append(key)
-        
-        for key in keys_to_remove:
-            del self._buckets[key]
+            for key in keys_to_remove:
+                del self._buckets[key]
 
 
 # Global rate limiter instance
@@ -173,6 +189,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """Middleware to apply rate limiting to all requests."""
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Start cleanup task if not already running
+        rate_limiter.start_cleanup_task()
+        
         # Skip rate limiting for health checks and docs
         if request.url.path in ["/", "/health", "/docs", "/openapi.json", "/redoc"]:
             return await call_next(request)
