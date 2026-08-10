@@ -120,6 +120,19 @@ async def create_global_draft(
     await db.commit()
     await db.refresh(draft)
     
+    # Cleanup old global drafts, keeping only the 5 most recent
+    old_drafts_result = await db.execute(
+        select(Draft)
+        .where(Draft.user_id == current_user.id, Draft.conversation_id.is_(None))
+        .order_by(Draft.updated_at.desc())
+        .offset(5)
+    )
+    old_drafts = old_drafts_result.scalars().all()
+    if old_drafts:
+        for old_draft in old_drafts:
+            await db.delete(old_draft)
+        await db.commit()
+    
     return DraftResponse.model_validate(draft)
 
 

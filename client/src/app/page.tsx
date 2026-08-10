@@ -90,12 +90,7 @@ export default function Home() {
   // Search state
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Array<{
-    conversationId: number;
-    conversationTitle: string;
-    messageContent: string;
-    messageRole: 'user' | 'assistant';
-  }>>([]);
+  const [searchResults, setSearchResults] = useState<Conversation[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -1109,29 +1104,11 @@ export default function Home() {
 
     setIsSearching(true);
     try {
-      const results: typeof searchResults = [];
-      const query = searchQuery.toLowerCase();
-
-      // Search through all conversations
-      for (const conv of conversations) {
-        try {
-          const fullConv = await conversationsApi.get(conv.id);
-          for (const msg of fullConv.messages) {
-            if (msg.content.toLowerCase().includes(query)) {
-              results.push({
-                conversationId: conv.id,
-                conversationTitle: conv.title,
-                messageContent: msg.content,
-                messageRole: msg.role,
-              });
-            }
-          }
-        } catch {
-          // Skip conversations that fail to load
-        }
-      }
-
-      setSearchResults(results.slice(0, 20)); // Limit to 20 results
+      const results = await conversationsApi.search(searchQuery.trim());
+      setSearchResults(results);
+    } catch (e) {
+      console.error('Search failed:', e);
+      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }
@@ -1543,21 +1520,17 @@ export default function Home() {
                 searchResults.map((result, index) => (
                   <button
                     key={index}
-                    onClick={() => goToSearchResult(result.conversationId)}
+                    onClick={() => goToSearchResult(result.id)}
                     className="w-full text-left px-4 py-3 hover:bg-chat-hover border-b border-chat-border last:border-0 transition-colors"
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs px-2 py-0.5 rounded bg-chat-accent/20 text-chat-accent">
-                        {result.messageRole === 'user' ? 'You' : 'AI'}
-                      </span>
-                      <span className="text-sm text-chat-muted truncate">
-                        {result.conversationTitle}
+                      <MessageSquare size={16} className="text-chat-muted" />
+                      <span className="text-sm font-medium truncate">
+                        {result.title}
                       </span>
                     </div>
-                    <p className="text-sm line-clamp-2">
-                      {result.messageContent.length > 150
-                        ? result.messageContent.slice(0, 150) + '...'
-                        : result.messageContent}
+                    <p className="text-xs text-chat-muted">
+                      Updated {new Date(result.updated_at).toLocaleDateString()}
                     </p>
                   </button>
                 ))

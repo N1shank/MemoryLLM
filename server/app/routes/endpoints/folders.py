@@ -146,8 +146,10 @@ async def update_folder(
     if not folder:
         raise NotFoundError("Folder not found")
     
+    update_data = data.model_dump(exclude_unset=True)
+    
     # Validate parent folder if provided
-    if data.parent_id is not None:
+    if "parent_id" in update_data:
         if data.parent_id == folder.id:
             raise ForbiddenError("Folder cannot be its own parent")
         if data.parent_id:
@@ -162,9 +164,9 @@ async def update_folder(
                 raise NotFoundError("Parent folder not found")
         folder.parent_id = data.parent_id
     
-    if data.name is not None:
+    if "name" in update_data:
         folder.name = data.name
-    if data.color is not None:
+    if "color" in update_data:
         folder.color = data.color
     
     await db.commit()

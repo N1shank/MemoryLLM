@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { 
   ArrowLeft, Brain, Search, ExternalLink, Loader2, 
   AlertCircle, RefreshCw, FileText, Database, Calendar,
-  Trash2, Edit2, X, Check, Plus
+  Trash2, Edit2, X, Check, Plus, Bot
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { notionApi, ApiClientError } from '@/lib/api';
@@ -26,6 +26,9 @@ export default function MemoryManagerPage() {
   
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  
+  const [isOrganizing, setIsOrganizing] = useState(false);
+  const [organizeResult, setOrganizeResult] = useState('');
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -107,6 +110,25 @@ export default function MemoryManagerPage() {
       setError(e instanceof ApiClientError ? e.message : 'Failed to create memory');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleAutoOrganize = async () => {
+    setIsOrganizing(true);
+    setOrganizeResult('');
+    setError('');
+    try {
+      const res = await notionApi.autoOrganize();
+      if (res.status === 'skipped') {
+        setOrganizeResult(`No new facts to extract: ${res.reason}`);
+      } else {
+        setOrganizeResult(`Successfully extracted and synced ${res.facts_added} new facts to Notion!`);
+        await loadMemories();
+      }
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : 'Failed to run auto-organizer');
+    } finally {
+      setIsOrganizing(false);
     }
   };
 
@@ -224,13 +246,32 @@ export default function MemoryManagerPage() {
                 />
               </div>
               <button 
+                onClick={handleAutoOrganize}
+                disabled={isOrganizing}
+                className="px-4 py-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 font-medium transition-colors flex items-center gap-2"
+                title="Automatically extract facts from recent chats"
+              >
+                {isOrganizing ? <Loader2 size={18} className="animate-spin" /> : <Bot size={18} />}
+                Auto-Organize
+              </button>
+              <button 
                 onClick={() => setIsCreating(true)}
-                className="px-4 py-3 rounded-xl bg-chat-accent hover:bg-chat-accent-hover font-medium transition-colors flex items-center gap-2"
+                className="px-4 py-3 rounded-xl bg-chat-accent hover:bg-chat-accent-hover font-medium transition-colors flex items-center gap-2 text-white"
               >
                 <Plus size={18} />
                 New Memory
               </button>
             </div>
+
+            {organizeResult && (
+              <div className="mb-6 p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center gap-3">
+                <Bot size={20} className="text-purple-400 shrink-0" />
+                <p className="text-purple-400 text-sm">{organizeResult}</p>
+                <button onClick={() => setOrganizeResult('')} className="ml-auto text-purple-400 hover:bg-purple-400/20 p-1 rounded">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
 
             {isCreating && (
               <div className="mb-6 p-4 rounded-xl bg-chat-sidebar border border-chat-border flex items-center gap-3">

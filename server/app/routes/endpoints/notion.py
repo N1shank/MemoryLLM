@@ -5,13 +5,25 @@ import logging
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.core.deps import CurrentUser
+from app.core.deps import CurrentUser, get_db
 from app.core.security import decrypt_api_key
 from app.core.exceptions import BadRequestError
+from app.services.auto_organizer import run_auto_organizer
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/notion", tags=["notion"])
+
+@router.post("/auto-organize")
+async def trigger_auto_organize(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db)
+) -> dict:
+    """Manually trigger the background memory auto-organizer agent."""
+    result = await run_auto_organizer(db, current_user)
+    return result
 
 
 @router.post("/search")

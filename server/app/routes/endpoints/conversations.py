@@ -75,6 +75,62 @@ async def list_conversations(
     return PaginatedResponse(items=conversations, total_count=total_count)
 
 
+@router.get("/search", response_model=list[ConversationResponse])
+async def search_conversations(
+    query: str,
+    db: DBSession,
+    current_user: CurrentUser,
+    limit: int = Query(50, ge=1, le=100),
+) -> list[ConversationResponse]:
+    """Search conversations by title or message content."""
+    search_term = f"%{query}%"
+
+    # First, find IDs of conversations that match
+    matching_ids_stmt = (
+        select(Conversation.id)
+        .outerjoin(Message, Conversation.id == Message.conversation_id)
+        .where(
+            Conversation.user_id == current_user.id,
+            Conversation.is_archived.is_(False),
+            (Conversation.title.ilike(search_term)) | (Message.content.ilike(search_term))
+        )
+    )
+    
+    # Then fetch those conversations with their message counts
+    stmt = (
+        select(
+            Conversation,
+            func.count(Message.id).label("message_count"),
+        )
+        .outerjoin(Message, Conversation.id == Message.conversation_id)
+        .where(
+            Conversation.id.in_(matching_ids_stmt)
+        )
+        .group_by(Conversation.id)
+        .order_by(Conversation.updated_at.desc())
+        .limit(limit)
+    )
+    
+    result = await db.execute(stmt)
+    
+    conversations = []
+    for row in result:
+        conv = row[0]
+        conversations.append(ConversationResponse(
+            id=conv.id,
+            title=conv.title,
+            is_pinned=conv.is_pinned,
+            is_archived=conv.is_archived,
+            folder_id=conv.folder_id,
+            tags=conv.tags or [],
+            created_at=conv.created_at,
+            updated_at=conv.updated_at,
+            message_count=row[1],
+        ))
+        
+    return conversations
+
+
 @router.post("", response_model=ConversationResponse, status_code=201)
 async def create_conversation(
     data: ConversationCreate,
@@ -150,13 +206,14 @@ async def update_conversation(
     if conversation.user_id != current_user.id:
         raise ForbiddenError("You don't have access to this conversation")
     
-    if data.title is not None:
+    update_data = data.model_dump(exclude_unset=True)
+    if "title" in update_data:
         conversation.title = data.title
-    if data.is_pinned is not None:
+    if "is_pinned" in update_data:
         conversation.is_pinned = data.is_pinned
-    if data.is_archived is not None:
+    if "is_archived" in update_data:
         conversation.is_archived = data.is_archived
-    if data.folder_id is not None:
+    if "folder_id" in update_data:
         # Validate folder belongs to user if provided
         if data.folder_id:
             from app.models.folder import Folder
@@ -170,7 +227,7 @@ async def update_conversation(
             if not folder:
                 raise NotFoundError("Folder not found")
         conversation.folder_id = data.folder_id
-    if data.tags is not None:
+    if "tags" in update_data:
         conversation.tags = data.tags
     
     await db.commit()
