@@ -182,7 +182,7 @@ export interface ShareStatus { is_shared: boolean; share_token?: string; share_u
 
 // Conversations API
 export const conversationsApi = {
-  list: () => request('/api/v1/conversations'),
+  list: (limit = 50, offset = 0) => request(`/api/v1/conversations?limit=${limit}&offset=${offset}`),
   get: (id: number) => request(`/api/v1/conversations/${id}`),
   create: (data: any) => request('/api/v1/conversations', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, title: string) => request(`/api/v1/conversations/${id}`, { method: 'PUT', body: JSON.stringify({ title }) }),
@@ -195,6 +195,7 @@ export const conversationsApi = {
 
 // Chat API
 export const chatApi = {
+  getMessages: (conversationId: number, limit = 50, offset = 0) => request(`/api/v1/chat/conversations/${conversationId}/messages?limit=${limit}&offset=${offset}`),
   async *sendStream(content: string, conversationId?: number, files: number[] = []) {
     const token = getAuthToken();
     const url = new URL(`${API_BASE_URL}/api/v1/chat/stream`);
@@ -301,4 +302,7 @@ export const userApi = {
 // Notion API
 export const notionApi = {
   search: () => request('/api/v1/notion/search', { method: 'POST' }),
+  createPage: (title: string) => request('/api/v1/notion/pages', { method: 'POST', body: JSON.stringify({ title }) }),
+  deletePage: (pageId: string) => request(`/api/v1/notion/pages/${pageId}`, { method: 'DELETE' }),
+  updatePage: (pageId: string, title: string) => request(`/api/v1/notion/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ title }) }),
 };
