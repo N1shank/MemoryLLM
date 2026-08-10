@@ -183,7 +183,7 @@ async def chat_stream(
             async for chunk, context in gemini_agent.chat_stream(
                 message=request.message,
                 conversation_history=history,
-                notion_api_key=user_notion_api_key,
+                user=current_user,
             ):
                 full_response += chunk
                 if context:

@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from app.models.user import User
 from app.models.conversation import Conversation, Message
 from app.core.security import decrypt_api_key
-from app.services.gemini_agent import get_gemini_client
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -66,14 +65,20 @@ async def run_auto_organizer(db: AsyncSession, user: User):
     """
     
     try:
-        client = get_gemini_client()
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
+        from google.antigravity import Agent, LocalAgentConfig
+        
+        config = LocalAgentConfig(
+            system_instructions="You extract facts as JSON lists of strings."
         )
         
+        response_text = ""
+        async with Agent(config) as agent:
+            response = await agent.chat(prompt)
+            async for token in response:
+                response_text += token
+        
         # Parse the JSON array
-        response_text = response.text.strip()
+        response_text = response_text.strip()
         if response_text.startswith("```json"):
             response_text = response_text[7:-3]
         elif response_text.startswith("```"):
@@ -86,7 +91,7 @@ async def run_auto_organizer(db: AsyncSession, user: User):
             return {"status": "skipped", "reason": "No facts extracted"}
             
     except Exception as e:
-        logger.error(f"Failed to extract facts with Gemini: {e}")
+        logger.error(f"Failed to extract facts with AGY: {e}")
         return {"status": "error", "error": str(e)}
 
     # 3. Push extracted facts to Notion
