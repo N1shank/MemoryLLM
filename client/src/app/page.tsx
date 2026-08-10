@@ -59,6 +59,14 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingConversations, setIsFetchingConversations] = useState(true);
+
+  const [conversationsOffset, setConversationsOffset] = useState(0);
+  const [hasMoreConversations, setHasMoreConversations] = useState(true);
+  const [messagesOffset, setMessagesOffset] = useState(0);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const CONVERSATIONS_LIMIT = 50;
+  const MESSAGES_LIMIT = 50;
+
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -124,6 +132,8 @@ export default function Home() {
   const [tagInput, setTagInput] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isLoadingOlderRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const draftSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -312,10 +322,21 @@ export default function Home() {
     }
   }, [editMessageContent]);
 
-  const fetchConversations = async () => {
+  const fetchConversations = async (loadMore = false) => {
     try {
-      const convs = await conversationsApi.list();
-      setConversations(convs);
+      const currentOffset = loadMore ? conversationsOffset : 0;
+      const data = await conversationsApi.list(CONVERSATIONS_LIMIT, currentOffset);
+      const convs = data.items || [];
+      const totalCount = data.total_count || 0;
+      
+      if (loadMore) {
+        setConversations(prev => [...prev, ...convs]);
+      } else {
+        setConversations(convs);
+      }
+      
+      setConversationsOffset(currentOffset + convs.length);
+      setHasMoreConversations(currentOffset + convs.length < totalCount);
     } catch (e) {
       if (e instanceof ApiClientError && e.status === 401) {
         logout();
@@ -333,15 +354,25 @@ export default function Home() {
     setError(null);
     setIsLoadingMessages(true);
     setMessages([]);
+    setMessagesOffset(0);
+    setHasMoreMessages(true);
 
     try {
-      const conv = await conversationsApi.get(id);
-      setMessages(conv.messages.map((m: any) => ({
+      const data = await chatApi.getMessages(id, MESSAGES_LIMIT, 0);
+      const msgs = data.items || [];
+      const totalCount = data.total_count || 0;
+      
+      // Messages come ordered by newest first (descending). Reverse to display oldest first.
+      const formattedMsgs = msgs.map((m: any) => ({
         ...m,
         feedback: m.feedback || null,
         created_at: m.created_at,
         isStreaming: false,
-      })));
+      })).reverse();
+      
+      setMessages(formattedMsgs);
+      setMessagesOffset(msgs.length);
+      setHasMoreMessages(msgs.length < totalCount);
     } catch (e) {
       if (e instanceof ApiClientError) {
         if (e.status === 401) {
@@ -358,9 +389,53 @@ export default function Home() {
       setIsLoadingMessages(false);
     }
   };
+  
+  const loadMoreMessages = async () => {
+    if (!currentConversationId || !hasMoreMessages || isLoadingMessages) return;
+    
+    setIsLoadingMessages(true);
+    isLoadingOlderRef.current = true;
+    
+    // Save current scroll height to adjust scroll position after rendering
+    const container = chatContainerRef.current;
+    const prevScrollHeight = container ? container.scrollHeight : 0;
+    
+    try {
+      const data = await chatApi.getMessages(currentConversationId, MESSAGES_LIMIT, messagesOffset);
+      const msgs = data.items || [];
+      const totalCount = data.total_count || 0;
+      
+      const formattedMsgs = msgs.map((m: any) => ({
+        ...m,
+        feedback: m.feedback || null,
+        created_at: m.created_at,
+        isStreaming: false,
+      })).reverse();
+      
+      setMessages(prev => [...formattedMsgs, ...prev]);
+      setMessagesOffset(prev => prev + msgs.length);
+      setHasMoreMessages(messagesOffset + msgs.length < totalCount);
+      
+      // We use setTimeout to allow DOM to update before adjusting scroll
+      setTimeout(() => {
+        if (container) {
+          container.scrollTop = container.scrollHeight - prevScrollHeight;
+        }
+        isLoadingOlderRef.current = false;
+      }, 0);
+    } catch (e) {
+      console.error('Failed to load more messages:', e);
+      isLoadingOlderRef.current = false;
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  };
+  
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!isLoadingOlderRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   useEffect(() => {
@@ -1884,6 +1959,15 @@ export default function Home() {
               </div>
             ))
           )}
+          
+          {hasMoreConversations && !isFetchingConversations && (
+            <button
+              onClick={() => fetchConversations(true)}
+              className="w-full py-2 text-sm text-chat-muted hover:text-chat-accent hover:bg-chat-hover/50 rounded-lg transition-colors mt-2"
+            >
+              Load More
+            </button>
+          )}
         </div>
 
         <div className="p-3 border-t border-chat-border space-y-2">
@@ -2086,7 +2170,7 @@ export default function Home() {
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" ref={chatContainerRef}>
           {isLoadingMessages ? (
             <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
               {[1, 2, 3].map((i) => (
@@ -2131,6 +2215,27 @@ export default function Home() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto px-4 py-6">
+              {hasMoreMessages && (
+                <div className="flex justify-center mb-6">
+                  <button 
+                    onClick={loadMoreMessages}
+                    disabled={isLoadingMessages}
+                    className="px-4 py-2 bg-chat-input hover:bg-chat-hover text-sm rounded-lg transition-colors border border-chat-border flex items-center gap-2 text-chat-muted hover:text-chat-accent"
+                  >
+                    {isLoadingMessages ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <ChevronUp size={16} />
+                        Load older messages
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
               {messages.map((message, index) => {
                 const isSearchResult = messageSearchResults.includes(index);
                 const isCurrentSearchResult = currentMessageSearchIndex >= 0 && messageSearchResults[currentMessageSearchIndex] === index;

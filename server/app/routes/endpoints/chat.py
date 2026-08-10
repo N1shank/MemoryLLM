@@ -6,14 +6,16 @@ from typing import AsyncGenerator
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.core.database import async_session
 from app.core.deps import DBSession, CurrentUser
 from app.core.exceptions import NotFoundError, ForbiddenError, ServiceUnavailableError
 from app.models.conversation import Conversation, Message
+from fastapi import Query
 from app.schemas.chat import (
+    PaginatedResponse,
     ChatRequest, 
     ChatResponse, 
     MessageFeedbackUpdate, 
@@ -373,6 +375,54 @@ async def edit_message(
     
     return MessageResponse.model_validate(message)
 
+
+
+@router.get("/conversations/{conversation_id}/messages", response_model=PaginatedResponse[MessageResponse])
+async def get_messages(
+    conversation_id: int,
+    db: DBSession,
+    current_user: CurrentUser,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> PaginatedResponse[MessageResponse]:
+    """
+    Get paginated messages for a conversation.
+    """
+    # Verify conversation ownership
+    result = await db.execute(
+        select(Conversation).where(Conversation.id == conversation_id)
+    )
+    conversation = result.scalar_one_or_none()
+    
+    if not conversation:
+        raise NotFoundError("Conversation not found")
+        
+    if conversation.user_id != current_user.id:
+        raise ForbiddenError("You don't have access to this conversation")
+
+    # Get total count
+    count_query = select(func.count(Message.id)).where(Message.conversation_id == conversation_id)
+    total_count = (await db.execute(count_query)).scalar() or 0
+
+    # Get messages (order by created_at descending for infinite scroll, or ascending? 
+    # Usually we want newest messages, but client appends. Let's return descending to easily get older messages,
+    # wait, infinite scroll loads older messages, so order by id desc, then client reverses.
+    # The client expects messages in chronological order (oldest first). If we want to paginate,
+    # it's usually ordered by created_at DESC, limit, offset, and then the client reverses it.
+    # Let's order by created_at DESC.
+    messages_result = await db.execute(
+        select(Message)
+        .where(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    
+    messages = []
+    for msg in messages_result.scalars():
+        messages.append(MessageResponse.model_validate(msg))
+        
+    return PaginatedResponse(items=messages, total_count=total_count)
 
 @router.get("/health")
 async def health_check():

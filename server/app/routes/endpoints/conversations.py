@@ -13,21 +13,32 @@ from app.schemas.chat import (
     ConversationUpdate,
     ConversationResponse,
     ConversationWithMessages,
+    PaginatedResponse,
 )
+from fastapi import Query
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
-@router.get("", response_model=list[ConversationResponse])
+@router.get("", response_model=PaginatedResponse[ConversationResponse])
 async def list_conversations(
     db: DBSession,
     current_user: CurrentUser,
-) -> list[ConversationResponse]:
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> PaginatedResponse[ConversationResponse]:
     """
     List all conversations for the current user.
     
     Returns conversations sorted by last updated (most recent first).
     """
+    # Get total count
+    count_query = select(func.count(Conversation.id)).where(
+        Conversation.user_id == current_user.id,
+        Conversation.is_archived.is_(False)
+    )
+    total_count = (await db.execute(count_query)).scalar() or 0
+
     # Get conversations with message count
     # Sort by pinned first, then by updated_at
     result = await db.execute(
@@ -42,6 +53,8 @@ async def list_conversations(
         )
         .group_by(Conversation.id)
         .order_by(Conversation.is_pinned.desc(), Conversation.updated_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     
     conversations = []
@@ -59,7 +72,7 @@ async def list_conversations(
             message_count=row[1],
         ))
     
-    return conversations
+    return PaginatedResponse(items=conversations, total_count=total_count)
 
 
 @router.post("", response_model=ConversationResponse, status_code=201)

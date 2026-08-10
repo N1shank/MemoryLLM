@@ -16,12 +16,6 @@ export function ShareButton({ conversationId }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen && !status) {
-      loadStatus();
-    }
-  }, [isOpen, status, loadStatus]);
-
   const loadStatus = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -34,6 +28,14 @@ export function ShareButton({ conversationId }: ShareButtonProps) {
       setIsLoading(false);
     }
   }, [conversationId]);
+
+  useEffect(() => {
+    if (isOpen && !status) {
+      loadStatus();
+    }
+  }, [isOpen, status, loadStatus]);
+
+
 
   const toggleSharing = async () => {
     setIsToggling(true);

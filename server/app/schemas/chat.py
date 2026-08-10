@@ -92,3 +92,11 @@ class RegenerateRequest(BaseModel):
 class MessageEdit(BaseModel):
     """Schema for editing a message."""
     content: str = Field(..., min_length=1)
+
+from typing import TypeVar, Generic
+
+T = TypeVar("T")
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: list[T]
+    total_count: int
