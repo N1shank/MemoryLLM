@@ -7,7 +7,7 @@ import {
   Trash2, Pencil, Check, MoreHorizontal, AlertCircle,
   Loader2, RefreshCw, Copy, CheckCheck, Sun, Moon, Download, Search,
   Settings, HelpCircle, Keyboard, Pin, PinOff, ThumbsUp, ThumbsDown, Archive,
-  ChevronUp, ChevronDown, FileText, Bookmark, Square, CheckSquare, MessageSquare
+  ChevronUp, ChevronDown, FileText, Bookmark, Square, CheckSquare, MessageSquare, Volume2, VolumeX
 } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
@@ -72,6 +72,13 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Auto-TTS State
+  const [voiceMode, setVoiceMode] = useState(false);
+  const voiceModeRef = useRef(voiceMode);
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+  }, [voiceMode]);
+
   // Edit/delete conversation state
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -125,6 +132,53 @@ export default function Home() {
   // Tags
   const [editingTags, setEditingTags] = useState<number | null>(null);
   const [tagInput, setTagInput] = useState('');
+  
+  // Drag and Drop
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      for (const file of files) {
+        try {
+          const uploaded = await filesApi.upload(file as any);
+          setPendingAttachments(prev => [...prev, uploaded]);
+        } catch (err) {
+          setError(err instanceof ApiClientError ? err.message : 'Upload failed');
+          setTimeout(() => setError(null), 3000);
+        }
+      }
+    }
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -563,6 +617,13 @@ export default function Home() {
             }
             return updated;
           });
+          
+          if (voiceModeRef.current && window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(fullContent);
+            utterance.lang = 'en-US';
+            window.speechSynthesis.speak(utterance);
+          }
         } else if (event.type === 'error') {
           throw new Error(event.message || 'Streaming error');
         }
@@ -648,8 +709,9 @@ export default function Home() {
 
     try {
       let newConversationId = currentConversationId;
+      const fileNames = pendingAttachments.map(f => f.filename);
 
-      for await (const event of chatApi.sendStream(content, currentConversationId || undefined)) {
+      for await (const event of chatApi.sendStream(content.trim(), currentConversationId || undefined, fileNames)) {
         if (event.type === 'chunk') {
           setMessages(prev => {
             const updated = [...prev];
@@ -2001,8 +2063,23 @@ export default function Home() {
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 flex flex-col min-w-0">
+      {/* Main chat area */}
+      <main 
+        className="flex-1 flex flex-col relative h-full bg-background"
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {isDragging && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-chat-accent rounded-lg m-4 pointer-events-none">
+            <div className="text-center">
+              <FileText size={48} className="mx-auto mb-4 text-chat-accent animate-bounce" />
+              <h3 className="text-2xl font-bold text-foreground">Drop files here</h3>
+              <p className="text-chat-muted mt-2">Add images or documents to the chat</p>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <header className="flex items-center gap-3 px-4 py-3 border-b border-chat-border bg-chat-bg/80 backdrop-blur-sm">
           <button
@@ -2492,6 +2569,13 @@ export default function Home() {
                 className="flex-1 bg-transparent py-4 resize-none focus:outline-none max-h-[200px] disabled:opacity-50"
               />
               <div className="flex items-center gap-1 m-2">
+                <button
+                  onClick={(e) => { e.preventDefault(); setVoiceMode(!voiceMode); }}
+                  className={`p-2 rounded-lg transition-colors ${voiceMode ? 'text-chat-accent bg-chat-accent/10' : 'text-chat-muted hover:text-foreground hover:bg-chat-hover'}`}
+                  title={voiceMode ? 'Disable Auto-TTS' : 'Enable Auto-TTS'}
+                >
+                  {voiceMode ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                </button>
                 <VoiceInput
                   onTranscript={(text) => setInput(prev => prev + (prev ? ' ' : '') + text)}
                   disabled={isLoading}

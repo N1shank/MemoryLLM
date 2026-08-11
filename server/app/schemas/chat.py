@@ -69,6 +69,7 @@ class ChatRequest(BaseModel):
     """Schema for sending a chat message."""
     message: str = Field(..., min_length=1)
     conversation_id: int | None = None  # If None, creates new conversation
+    files: list[str] = []
 
 
 class ChatResponse(BaseModel):

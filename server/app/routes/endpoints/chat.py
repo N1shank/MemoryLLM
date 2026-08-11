@@ -184,6 +184,7 @@ async def chat_stream(
                 message=request.message,
                 conversation_history=history,
                 user=current_user,
+                files=request.files,
             ):
                 full_response += chunk
                 if context:

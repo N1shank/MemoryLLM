@@ -3,8 +3,11 @@
 import logging
 from typing import AsyncGenerator
 import httpx
+from pathlib import Path
+import mimetypes
 
 from google.antigravity import Agent, LocalAgentConfig
+from google.antigravity.types import Image
 
 from app.core.config import settings
 from app.core.security import decrypt_api_key
@@ -37,6 +40,7 @@ class AGYAgent:
         message: str,
         conversation_history: list[dict],
         user: User,
+        files: list[str] | None = None,
     ) -> AsyncGenerator[tuple[str, str | None], None]:
         """
         Process a chat message with streaming response using AGY SDK.
@@ -124,7 +128,17 @@ class AGYAgent:
                 
                 full_prompt = f"Previous conversation history:\n{formatted_history}\n\nUSER: {message}"
                 
-                response = await agent.chat(full_prompt)
+                parts = [full_prompt]
+                if files:
+                    for filename in files:
+                        file_path = Path(settings.UPLOAD_DIR) / Path(filename).name
+                        if file_path.exists():
+                            mime_type, _ = mimetypes.guess_type(str(file_path))
+                            if mime_type and mime_type.startswith("image/"):
+                                image_data = file_path.read_bytes()
+                                parts.append(Image(data=image_data, mime_type=mime_type))
+                
+                response = await agent.chat(parts)
                 
                 # Stream the response
                 async for token in response:

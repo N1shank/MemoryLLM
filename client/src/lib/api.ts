@@ -197,17 +197,25 @@ export const conversationsApi = {
 // Chat API
 export const chatApi = {
   getMessages: (conversationId: number, limit = 50, offset = 0) => request(`/api/v1/chat/conversations/${conversationId}/messages?limit=${limit}&offset=${offset}`),
-  async *sendStream(content: string, conversationId?: number, files: number[] = []) {
+  async *sendStream(content: string, conversationId?: number, files: string[] = []) {
     const token = getAuthToken();
     const url = new URL(`${API_BASE_URL}/api/v1/chat/stream`);
-    if (conversationId) url.searchParams.append('conversation_id', conversationId.toString());
-    files.forEach(f => url.searchParams.append('file_ids', f.toString()));
-    url.searchParams.append('content', content);
 
-    const headers = new Headers({ 'Accept': 'text/event-stream' });
+    const headers = new Headers({ 
+      'Accept': 'text/event-stream',
+      'Content-Type': 'application/json'
+    });
     if (token) headers.set('Authorization', `Bearer ${token}`);
 
-    const response = await fetch(url.toString(), { headers });
+    const response = await fetch(url.toString(), { 
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ 
+        message: content, 
+        conversation_id: conversationId,
+        files: files 
+      })
+    });
     
     if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
