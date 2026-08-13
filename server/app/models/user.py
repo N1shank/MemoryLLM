@@ -18,6 +18,8 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     notion_api_key: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    notion_workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    notion_workspace_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     notion_pages: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True, default=list)  # Selected Notion pages
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

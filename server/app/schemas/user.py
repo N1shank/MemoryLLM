@@ -10,6 +10,7 @@ class UserResponse(BaseModel):
     email: str
     username: str
     notion_api_key_configured: bool = False
+    notion_workspace_name: str | None = None
     notion_pages: list[dict] = []
 
     class Config:

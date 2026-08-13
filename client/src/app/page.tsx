@@ -29,6 +29,7 @@ import {
   foldersApi,
   Folder,
   draftsApi,
+  filesApi,
 } from '@/lib/api';
 
 interface Attachment {
@@ -590,9 +591,11 @@ export default function Home() {
 
     try {
       let newConversationId = conversationId;
+      let fullContent = '';
 
       for await (const event of chatApi.sendStream(content.trim(), conversationId || undefined)) {
         if (event.type === 'chunk') {
+          fullContent += (event.content || '');
           setMessages(prev => {
             const updated = [...prev];
             const lastMsg = updated[updated.length - 1];
@@ -630,7 +633,7 @@ export default function Home() {
       }
 
       if (newConversationId && newConversationId !== conversationId) {
-        setCurrentConversationId(newConversationId);
+        setCurrentConversationId(prev => prev === conversationId ? newConversationId : prev);
         fetchConversations();
       }
     } catch (e) {
@@ -743,7 +746,7 @@ export default function Home() {
       }
 
       if (newConversationId && newConversationId !== currentConversationId) {
-        setCurrentConversationId(newConversationId);
+        setCurrentConversationId(prev => prev === currentConversationId ? newConversationId : prev);
         fetchConversations();
       }
     } catch (e) {

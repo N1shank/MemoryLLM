@@ -31,8 +31,11 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.0-flash"
 
-    # Notion MCP
+    # Notion MCP / Integration
     NOTION_API_KEY: str = ""
+    NOTION_CLIENT_ID: str = ""
+    NOTION_CLIENT_SECRET: str = ""
+    NOTION_REDIRECT_URI: str = "http://localhost:3000/settings/notion/callback"
     NOTION_MCP_SERVER_PATH: str = "npx"
     NOTION_MCP_SERVER_ARGS: list[str] = ["-y", "@notionhq/notion-mcp-server"]
 
