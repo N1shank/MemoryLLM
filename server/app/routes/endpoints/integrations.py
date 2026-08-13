@@ -86,8 +86,10 @@ async def notion_callback(
             await db.commit()
             await db.refresh(current_user)
             
-            # Setup structured memory layer asynchronously or here
-            # We will do it in a separate function to keep the callback fast
+            # Setup structured memory layer asynchronously
+            import asyncio
+            from app.services.memory_layer import initialize_memory_layer
+            asyncio.create_task(initialize_memory_layer(access_token, current_user.id))
             
             return {"status": "success", "workspace_name": workspace_name}
     except Exception as e:

@@ -16,17 +16,16 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 
 
-SYSTEM_PROMPT = """You are an intelligent AI assistant with access to a Notion workspace as your memory.
+SYSTEM_PROMPT = """You are an intelligent AI assistant with access to a structured Notion workspace as your memory layer.
 
-You can use the provided tools to:
-- Search for information you've stored before
-- Create new pages to remember important information
+You have access to specialized databases:
+- Facts & Notes: For storing facts, preferences, and long-term knowledge about the user.
+- Skills: For instructions on how you should behave or perform tasks.
+- Projects & Tasks: For tracking actionable items.
 
-When the user shares important information (preferences, facts, context about themselves or their work), 
-proactively save it to Notion using the `create_notion_page` tool so you can recall it later.
-
-When answering questions, first check if you have relevant information stored in Notion.
-Be helpful, concise, and make good use of your memory capabilities."""
+When the user shares important information, proactively save it to the appropriate database.
+Always query your memory before answering personalized questions.
+Be helpful, concise, and leverage your structured memory capabilities."""
 
 
 class AGYAgent:
@@ -52,15 +51,31 @@ class AGYAgent:
         if user.notion_api_key:
             decrypted_key = decrypt_api_key(user.notion_api_key)
 
-        parent_id = None
-        if user.notion_pages and len(user.notion_pages) > 0:
-            parent_id = user.notion_pages[0].get("id")
+        dashboard_id = None
+        facts_db_id = None
+        projects_db_id = None
+        skills_db_id = None
+        
+        if user.notion_pages:
+            for page in user.notion_pages:
+                role = page.get("role")
+                if role == "dashboard":
+                    dashboard_id = page.get("id")
+                elif role == "facts":
+                    facts_db_id = page.get("id")
+                elif role == "projects":
+                    projects_db_id = page.get("id")
+                elif role == "skills":
+                    skills_db_id = page.get("id")
+                elif not dashboard_id:
+                    # Fallback to first page if no roles defined
+                    dashboard_id = page.get("id")
 
         tools = []
         
         if decrypted_key:
-            async def search_notion(query: str) -> dict:
-                """Search for pages and databases in the user's Notion workspace."""
+            async def search_workspace(query: str) -> dict:
+                """Search across the entire Notion workspace for any information."""
                 try:
                     async with httpx.AsyncClient(timeout=10.0) as client:
                         response = await client.post(
@@ -70,23 +85,38 @@ class AGYAgent:
                                 "Notion-Version": "2022-06-28",
                                 "Content-Type": "application/json",
                             },
-                            json={
-                                "query": query,
-                                "sort": {
-                                    "direction": "descending",
-                                    "timestamp": "last_edited_time"
-                                }
-                            }
+                            json={"query": query}
                         )
                         return response.json()
                 except Exception as e:
                     return {"error": str(e)}
 
-            async def create_notion_page(title: str) -> dict:
-                """Create a new Notion page to store memory/facts about the user."""
-                if not parent_id:
-                    return {"error": "No Notion parent page configured."}
+            async def save_fact(fact_title: str, category: str = "General") -> dict:
+                """Save a fact or note about the user to the Facts & Notes database."""
+                if not facts_db_id:
+                    # Fallback to standard page creation if DB not set up
+                    if not dashboard_id:
+                        return {"error": "No Notion integration configured."}
+                    try:
+                        async with httpx.AsyncClient(timeout=10.0) as client:
+                            res = await client.post(
+                                "https://api.notion.com/v1/pages",
+                                headers={
+                                    "Authorization": f"Bearer {decrypted_key}",
+                                    "Notion-Version": "2022-06-28",
+                                    "Content-Type": "application/json",
+                                },
+                                json={
+                                    "parent": {"type": "page_id", "page_id": dashboard_id},
+                                    "properties": {"title": {"title": [{"text": {"content": f"[{category}] {fact_title}"}}]}}
+                                }
+                            )
+                            return res.json()
+                    except Exception as e:
+                        return {"error": str(e)}
+                        
                 try:
+                    import datetime
                     async with httpx.AsyncClient(timeout=10.0) as client:
                         response = await client.post(
                             "https://api.notion.com/v1/pages",
@@ -96,19 +126,48 @@ class AGYAgent:
                                 "Content-Type": "application/json",
                             },
                             json={
-                                "parent": {"type": "page_id", "page_id": parent_id},
+                                "parent": {"type": "database_id", "database_id": facts_db_id},
                                 "properties": {
-                                    "title": {
-                                        "title": [{"text": {"content": title}}]
-                                    }
+                                    "Title": {"title": [{"text": {"content": fact_title}}]},
+                                    "Category": {"select": {"name": category}},
+                                    "Date Added": {"date": {"start": datetime.datetime.now().isoformat()}}
                                 }
                             }
                         )
                         return response.json()
                 except Exception as e:
                     return {"error": str(e)}
+                    
+            async def save_task(task_title: str, due_date_iso: str = None) -> dict:
+                """Save a task to the Projects & Tasks database."""
+                if not projects_db_id:
+                    return {"error": "Projects database not configured."}
+                try:
+                    props = {
+                        "Project": {"title": [{"text": {"content": task_title}}]},
+                        "Status": {"select": {"name": "Not started"}}
+                    }
+                    if due_date_iso:
+                        props["Due Date"] = {"date": {"start": due_date_iso}}
+                        
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        response = await client.post(
+                            "https://api.notion.com/v1/pages",
+                            headers={
+                                "Authorization": f"Bearer {decrypted_key}",
+                                "Notion-Version": "2022-06-28",
+                                "Content-Type": "application/json",
+                            },
+                            json={
+                                "parent": {"type": "database_id", "database_id": projects_db_id},
+                                "properties": props
+                            }
+                        )
+                        return response.json()
+                except Exception as e:
+                    return {"error": str(e)}
 
-            tools = [search_notion, create_notion_page]
+            tools = [search_workspace, save_fact, save_task]
 
         # Prepare config
         config = LocalAgentConfig(
