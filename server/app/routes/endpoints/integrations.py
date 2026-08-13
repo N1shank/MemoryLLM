@@ -2,7 +2,7 @@
 
 import base64
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
@@ -41,6 +41,7 @@ async def notion_authorize(
 async def notion_callback(
     code: str,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -87,9 +88,8 @@ async def notion_callback(
             await db.refresh(current_user)
             
             # Setup structured memory layer asynchronously
-            import asyncio
             from app.services.memory_layer import initialize_memory_layer
-            asyncio.create_task(initialize_memory_layer(access_token, current_user.id))
+            background_tasks.add_task(initialize_memory_layer, access_token, current_user.id)
             
             return {"status": "success", "workspace_name": workspace_name}
     except Exception as e:

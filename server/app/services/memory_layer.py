@@ -3,7 +3,7 @@
 import httpx
 import logging
 import json
-from app.core.database import async_session_maker
+from app.core.database import async_session
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ async def initialize_memory_layer(access_token: str, user_id: int):
             if projects_db:
                 memory_pages.append({"role": "projects", "id": projects_db["id"], "title": "Projects"})
             
-            async with async_session_maker() as db:
+            async with async_session() as db:
                 user = await db.get(User, user_id)
                 if user:
                     user.notion_pages = memory_pages

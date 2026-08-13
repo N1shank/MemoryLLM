@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { config } from '@/lib/config';
 import { getAuthToken } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function NotionCallback() {
+function NotionCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refreshUser } = useAuth();
@@ -117,5 +117,19 @@ export default function NotionCallback() {
         
       </div>
     </div>
+  );
+}
+
+export default function NotionCallback() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+        <div className="w-16 h-16 mx-auto bg-chat-accent/10 rounded-full flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-chat-accent animate-spin" />
+        </div>
+      </div>
+    }>
+      <NotionCallbackContent />
+    </Suspense>
   );
 }

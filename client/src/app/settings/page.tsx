@@ -130,6 +130,9 @@ export default function SettingsPage() {
       const data = await response.json();
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        setNotionLoading(false);
+        setNotionError('No authorization URL returned.');
       }
     } catch (e: any) {
       setNotionError(e.message || 'Failed to connect to Notion');
