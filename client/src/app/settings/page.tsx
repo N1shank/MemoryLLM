@@ -8,7 +8,8 @@ import {
   Loader2, Check, AlertCircle, Eye, EyeOff, BookOpen, ExternalLink, X
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { userApi, ApiClientError } from '@/lib/api';
+import { userApi, ApiClientError, getAuthToken } from '@/lib/api';
+import { config } from '@/lib/config';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -32,12 +33,9 @@ export default function SettingsPage() {
   const [passwordError, setPasswordError] = useState('');
   
   // Notion integration
-  const [notionApiKey, setNotionApiKey] = useState('');
-  const [showNotionKey, setShowNotionKey] = useState(false);
   const [notionLoading, setNotionLoading] = useState(false);
   const [notionSuccess, setNotionSuccess] = useState(false);
   const [notionError, setNotionError] = useState('');
-  const [isValidating, setIsValidating] = useState(false);
 
   // Delete account
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -56,10 +54,6 @@ export default function SettingsPage() {
       setName(user.name);
       setEmail(user.email);
       setUsername(user.username);
-      // Reset API key field - we can't show the actual encrypted key
-      // User needs to enter a new key to update, or leave empty to remove
-      setNotionApiKey('');
-      setShowNotionKey(false);
     }
   }, [user]);
 
@@ -123,67 +117,38 @@ export default function SettingsPage() {
     }
   };
 
-  const handleNotionSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setNotionError('');
-    setNotionSuccess(false);
-    
-    const trimmedKey = notionApiKey.trim();
-    
-    // If empty, remove the integration
-    if (!trimmedKey) {
-      setNotionLoading(true);
-      try {
-        await userApi.updateNotionApiKey(null);
-        setNotionSuccess(true);
-        setNotionApiKey('');
-        
-        // Refresh user data to update notion_api_key_configured status
-        await refreshUser();
-        
-        setTimeout(() => setNotionSuccess(false), 5000);
-      } catch (e) {
-        setNotionError(e instanceof ApiClientError ? e.message : 'Failed to remove Notion integration');
-      } finally {
-        setNotionLoading(false);
-      }
-      return;
-    }
-
-    // Validate and save the key
-    setIsValidating(true);
+  const handleConnectNotion = async () => {
     setNotionLoading(true);
-
+    setNotionError('');
     try {
-      // First validate the key
-      const validation = await userApi.validateNotionApiKey(trimmedKey);
-      
-      if (!validation.valid) {
-        setNotionError(validation.message);
-        setIsValidating(false);
-        setNotionLoading(false);
-        return;
+      const response = await fetch(`${config.apiUrl}/api/v1/integrations/notion/authorize`, {
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to get Notion authorization URL. Ensure Notion integration is configured in backend.');
       }
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (e: any) {
+      setNotionError(e.message || 'Failed to connect to Notion');
+      setNotionLoading(false);
+    }
+  };
 
-      // Key is valid, now save it
-      const result = await userApi.updateNotionApiKey(trimmedKey);
+  const handleDisconnectNotion = async () => {
+    if (!confirm('Are you sure you want to disconnect Notion? The AI will lose access to its memory layer.')) return;
+    
+    setNotionLoading(true);
+    try {
+      await userApi.updateNotionApiKey(null);
       setNotionSuccess(true);
-      setNotionApiKey(''); // Clear the field after successful save
-      setShowNotionKey(false);
-      
-      // Refresh user data to update notion_api_key_configured status
       await refreshUser();
-      
-      // Keep success message visible longer
       setTimeout(() => setNotionSuccess(false), 5000);
     } catch (e) {
-      if (e instanceof ApiClientError) {
-        setNotionError(e.message);
-      } else {
-        setNotionError('Failed to update Notion API key. Please try again.');
-      }
+      setNotionError(e instanceof ApiClientError ? e.message : 'Failed to disconnect Notion');
     } finally {
-      setIsValidating(false);
       setNotionLoading(false);
     }
   };
@@ -324,23 +289,53 @@ export default function SettingsPage() {
           </div>
 
           <p className="text-chat-muted text-sm mb-6">
-            Connect your Notion workspace to enable the AI to read and write to your Notion pages. 
-            We use <strong>Internal Integration tokens</strong> (not OAuth) - each user provides their own token.
-            Your API key is encrypted and stored securely in your account.
+            Connect your Notion workspace to enable the AI to use it as a powerful memory layer. 
+            The AI can store facts, create structured notes, and recall information seamlessly.
           </p>
 
           {/* Connection Status */}
-          {user?.notion_api_key_configured && (
-            <div className="mb-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-              <div className="flex items-start gap-3">
-                <Check size={18} className="text-green-400 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-green-400 text-sm font-medium mb-1">Notion Memory Active</p>
-                  <p className="text-chat-muted text-xs">
-                    Your Notion integration is connected and ready. The AI can now read from and write to your Notion pages.
-                  </p>
+          {user?.notion_api_key_configured ? (
+            <div className="mb-6 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-3">
+                  <Check size={18} className="text-green-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-green-400 text-sm font-medium mb-1">
+                      Connected to {user.notion_workspace_name || 'Notion Workspace'}
+                    </p>
+                    <p className="text-chat-muted text-xs">
+                      The AI is actively using this workspace as its memory layer.
+                    </p>
+                  </div>
                 </div>
+                <button
+                  onClick={handleDisconnectNotion}
+                  disabled={notionLoading}
+                  className="px-3 py-1.5 text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-md transition-colors"
+                >
+                  Disconnect
+                </button>
               </div>
+            </div>
+          ) : (
+            <div className="mb-6">
+              <button
+                onClick={handleConnectNotion}
+                disabled={notionLoading}
+                className="px-6 py-3 rounded-lg bg-chat-accent hover:bg-chat-accent-hover disabled:opacity-50 font-medium transition-colors flex items-center gap-2 w-full justify-center"
+              >
+                {notionLoading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Connecting to Notion...
+                  </>
+                ) : (
+                  <>
+                    <BookOpen size={18} />
+                    Connect to Notion
+                  </>
+                )}
+              </button>
             </div>
           )}
 
@@ -354,110 +349,9 @@ export default function SettingsPage() {
           {notionSuccess && (
             <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center gap-2">
               <Check size={16} className="text-green-400" />
-              <span className="text-green-400 text-sm">
-                {user?.notion_api_key_configured 
-                  ? 'Notion API key updated and connected successfully!' 
-                  : 'Notion API key validated and connected successfully!'}
-              </span>
+              <span className="text-green-400 text-sm">Notion integration updated successfully!</span>
             </div>
           )}
-
-          {/* Step-by-step Guide */}
-          <div className="mb-6 p-4 rounded-lg bg-chat-input border border-chat-border">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <BookOpen size={16} className="text-chat-accent" />
-              How to get your Notion API Key
-            </h3>
-            <ol className="space-y-3 text-sm text-chat-muted">
-              <li className="flex gap-3">
-                <span className="font-semibold text-chat-accent shrink-0 w-6">1.</span>
-                <span>
-                  Go to{' '}
-                  <a
-                    href="https://www.notion.so/my-integrations"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-chat-accent hover:text-chat-accent-hover underline inline-flex items-center gap-1"
-                  >
-                    Notion Integrations
-                    <ExternalLink size={12} />
-                  </a>
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <span className="font-semibold text-chat-accent shrink-0 w-6">2.</span>
-                <span>Click <strong>"+ New integration"</strong> or select an existing integration</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="font-semibold text-chat-accent shrink-0 w-6">3.</span>
-                <span>Give it a name (e.g., "MemoryLLM") and select your workspace</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="font-semibold text-chat-accent shrink-0 w-6">4.</span>
-                <span>Copy the <strong>"Internal Integration Token"</strong> (starts with <code className="px-1 py-0.5 rounded bg-chat-hover text-xs">secret_</code> or <code className="px-1 py-0.5 rounded bg-chat-hover text-xs">ntn_</code>)</span>
-              </li>
-              <li className="flex gap-3">
-                <span className="font-semibold text-chat-accent shrink-0 w-6">5.</span>
-                <span>
-                  <strong>Important:</strong> Share the pages you want the AI to access with your integration. 
-                  Click the <strong>"..."</strong> menu on any Notion page → <strong>"Add connections"</strong> → Select your integration
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <span className="font-semibold text-chat-accent shrink-0 w-6">6.</span>
-                <span>Paste the token below and click "Connect Notion"</span>
-              </li>
-            </ol>
-          </div>
-
-          <form onSubmit={handleNotionSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 flex items-center gap-2">
-                <BookOpen size={14} className="text-chat-muted" />
-                Notion API Key (Internal Integration Token)
-              </label>
-              <div className="relative">
-                <input
-                  type={showNotionKey ? 'text' : 'password'}
-                  value={notionApiKey}
-                  onChange={(e) => {
-                    setNotionApiKey(e.target.value);
-                    setNotionError('');
-                    setNotionSuccess(false);
-                  }}
-                  placeholder={user?.notion_api_key_configured ? 'Enter new key to update (current key is encrypted)' : 'secret_... or ntn_...'}
-                  className="w-full px-4 py-3 pr-12 rounded-lg bg-chat-input border border-chat-border focus:border-chat-accent focus:outline-none transition-colors font-mono text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNotionKey(!showNotionKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-chat-muted hover:text-foreground transition-colors"
-                >
-                  {showNotionKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-              <p className="text-xs text-chat-muted mt-2">
-                {user?.notion_api_key_configured 
-                  ? 'Enter a new key to update, or leave empty and submit to remove your Notion integration'
-                  : 'Your API key will be encrypted and stored securely. Leave empty to remove integration.'}
-              </p>
-            </div>
-
-            <button
-              type="submit"
-              disabled={notionLoading}
-              className="px-6 py-2.5 rounded-lg bg-chat-accent hover:bg-chat-accent-hover disabled:opacity-50 font-medium transition-colors flex items-center gap-2"
-            >
-              {notionLoading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  {isValidating ? 'Validating...' : 'Saving...'}
-                </>
-              ) : (
-                user?.notion_api_key_configured ? 'Update API Key' : 'Connect Notion'
-              )}
-            </button>
-          </form>
 
           {/* Notion Pages Selector */}
           {user?.notion_api_key_configured && (
