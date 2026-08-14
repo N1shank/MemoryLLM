@@ -2009,14 +2009,20 @@ export default function Home() {
         </div>
 
         <div className="p-3 border-t border-chat-border space-y-2">
-          {user?.notion_api_key_configured ? (
+          {(user?.notion_api_key_configured || user?.google_api_key_configured) ? (
             <Link
               href="/memory"
               className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors group"
             >
               <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
               <Brain size={16} className="text-green-400" />
-              <span className="text-green-400 text-sm font-medium">Notion Memory Active</span>
+              <span className="text-green-400 text-sm font-medium">
+                {user?.notion_api_key_configured && user?.google_api_key_configured
+                  ? 'Memory Active (Notion + Google)'
+                  : user?.notion_api_key_configured
+                    ? 'Notion Memory Active'
+                    : 'Google Memory Active'}
+              </span>
               <span className="ml-auto text-xs text-green-400 opacity-0 group-hover:opacity-100 transition-opacity">Manage</span>
             </Link>
           ) : (
@@ -2025,7 +2031,7 @@ export default function Home() {
               className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-chat-hover transition-colors group"
             >
               <Brain size={16} className="text-gray-500 group-hover:text-chat-muted" />
-              <span className="text-gray-500 text-sm group-hover:text-chat-muted">Notion Memory Inactive</span>
+              <span className="text-gray-500 text-sm group-hover:text-chat-muted">Memory Inactive</span>
               <span className="ml-auto text-xs text-chat-muted group-hover:text-chat-accent">Connect →</span>
             </Link>
           )}

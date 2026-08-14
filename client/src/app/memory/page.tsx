@@ -38,7 +38,7 @@ export default function MemoryManagerPage() {
   }, [authLoading, isAuthenticated, router]);
 
   const loadMemories = async () => {
-    if (!user?.notion_api_key_configured) {
+    if (!user?.notion_api_key_configured && !user?.google_api_key_configured) {
       setIsLoading(false);
       return;
     }
@@ -133,12 +133,12 @@ export default function MemoryManagerPage() {
   };
 
   useEffect(() => {
-    if (user?.notion_api_key_configured) {
+    if (user?.notion_api_key_configured || user?.google_api_key_configured) {
       loadMemories();
     } else {
       setIsLoading(false);
     }
-  }, [user?.notion_api_key_configured]);
+  }, [user?.notion_api_key_configured, user?.google_api_key_configured]);
 
   const filteredResults = results.filter(item => {
     if (!searchQuery) return true;
@@ -202,7 +202,7 @@ export default function MemoryManagerPage() {
               Memory Manager
             </h1>
           </div>
-          {user?.notion_api_key_configured && (
+          {(user?.notion_api_key_configured || user?.google_api_key_configured) && (
             <button 
               onClick={loadMemories}
               disabled={isLoading}
@@ -216,14 +216,14 @@ export default function MemoryManagerPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
-        {!user?.notion_api_key_configured ? (
+        {!(user?.notion_api_key_configured || user?.google_api_key_configured) ? (
           <div className="bg-chat-sidebar rounded-xl border border-chat-border p-8 text-center max-w-lg mx-auto mt-10">
             <div className="w-16 h-16 bg-chat-hover rounded-full flex items-center justify-center mx-auto mb-4">
               <Brain size={32} className="text-chat-muted" />
             </div>
-            <h2 className="text-xl font-semibold mb-2">Notion Memory Not Connected</h2>
+            <h2 className="text-xl font-semibold mb-2">Memory Not Connected</h2>
             <p className="text-chat-muted mb-6">
-              Connect your Notion workspace in Settings to enable the AI to remember facts and preferences.
+              Connect your Notion workspace or Google Drive in Settings to enable the AI to remember facts and preferences.
             </p>
             <Link 
               href="/settings"
