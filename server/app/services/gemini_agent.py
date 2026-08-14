@@ -202,16 +202,22 @@ class AGYAgent:
                 if not google_facts_doc_id:
                     return {"error": "Google Facts document not configured."}
                 try:
+                    import asyncio
                     import datetime
                     from googleapiclient.discovery import build
                     docs_service = build('docs', 'v1', credentials=_get_google_creds())
                     
                     text_to_insert = f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}] {fact_text}\n"
                     requests = [{'insertText': {'location': {'index': 1}, 'text': text_to_insert}}]
-                    docs_service.documents().batchUpdate(documentId=google_facts_doc_id, body={'requests': requests}).execute()
+                    await asyncio.to_thread(
+                        docs_service.documents().batchUpdate(
+                            documentId=google_facts_doc_id, body={'requests': requests}
+                        ).execute
+                    )
                     
                     return {"status": "success"}
                 except Exception as e:
+                    logger.error(f"save_fact_to_google failed: {e}", exc_info=True)
                     return {"error": str(e)}
 
             async def save_task_to_google(task_text: str, due_date: str = "") -> dict:
@@ -219,6 +225,7 @@ class AGYAgent:
                 if not google_projects_doc_id:
                     return {"error": "Google Projects document not configured."}
                 try:
+                    import asyncio
                     from googleapiclient.discovery import build
                     docs_service = build('docs', 'v1', credentials=_get_google_creds())
                     
@@ -228,10 +235,15 @@ class AGYAgent:
                     text_to_insert += "\n"
                     
                     requests = [{'insertText': {'location': {'index': 1}, 'text': text_to_insert}}]
-                    docs_service.documents().batchUpdate(documentId=google_projects_doc_id, body={'requests': requests}).execute()
+                    await asyncio.to_thread(
+                        docs_service.documents().batchUpdate(
+                            documentId=google_projects_doc_id, body={'requests': requests}
+                        ).execute
+                    )
                     
                     return {"status": "success"}
                 except Exception as e:
+                    logger.error(f"save_task_to_google failed: {e}", exc_info=True)
                     return {"error": str(e)}
             
             tools.extend([save_fact_to_google, save_task_to_google])

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -10,6 +11,7 @@ async def initialize_google_memory_layer(access_token: str, refresh_token: str, 
     """
     Initialize the Google Drive structured memory layer.
     Creates a master folder and 3 Google Docs for Facts, Skills, and Projects.
+    All synchronous Google API calls are offloaded to a thread to avoid blocking the event loop.
     """
     try:
         logger.info(f"Initializing Google Memory Layer for user {user_id}...")
@@ -31,7 +33,9 @@ async def initialize_google_memory_layer(access_token: str, refresh_token: str, 
             'name': '🧠 MemoryLLM Core Dashboard',
             'mimeType': 'application/vnd.google-apps.folder'
         }
-        folder = drive_service.files().create(body=folder_metadata, fields='id').execute()
+        folder = await asyncio.to_thread(
+            drive_service.files().create(body=folder_metadata, fields='id').execute
+        )
         folder_id = folder.get('id')
         
         logger.info(f"Created main folder with ID {folder_id}")
@@ -55,7 +59,9 @@ async def initialize_google_memory_layer(access_token: str, refresh_token: str, 
                 'mimeType': 'application/vnd.google-apps.document',
                 'parents': [folder_id]
             }
-            file = drive_service.files().create(body=doc_metadata, fields='id').execute()
+            file = await asyncio.to_thread(
+                drive_service.files().create(body=doc_metadata, fields='id').execute
+            )
             doc_id = file.get('id')
             
             # Write a header into the doc
@@ -70,7 +76,9 @@ async def initialize_google_memory_layer(access_token: str, refresh_token: str, 
                 }
             ]
             
-            docs_service.documents().batchUpdate(documentId=doc_id, body={'requests': requests}).execute()
+            await asyncio.to_thread(
+                docs_service.documents().batchUpdate(documentId=doc_id, body={'requests': requests}).execute
+            )
             
             memory_files.append({"role": doc_info["role"], "id": doc_id, "title": doc_info["title"]})
             logger.info(f"Created doc '{doc_info['title']}' with ID {doc_id}")
