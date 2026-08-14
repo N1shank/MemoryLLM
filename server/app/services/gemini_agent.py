@@ -34,6 +34,25 @@ class AGYAgent:
     def __init__(self):
         pass
 
+    async def chat(
+        self,
+        message: str,
+        conversation_history: list[dict],
+        user: User,
+        files: list[str] | None = None,
+    ) -> tuple[str, str | None]:
+        """
+        Process a chat message and return the full response.
+        Used by non-streaming /chat and /regenerate endpoints.
+        """
+        full_response = ""
+        memory_context = None
+        async for chunk, ctx in self.chat_stream(message, conversation_history, user, files):
+            full_response += chunk
+            if ctx:
+                memory_context = ctx
+        return full_response, memory_context
+
     async def chat_stream(
         self,
         message: str,

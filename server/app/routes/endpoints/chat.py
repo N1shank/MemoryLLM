@@ -88,7 +88,7 @@ async def chat(
         response_text, memory_context = await gemini_agent.chat(
             message=request.message,
             conversation_history=history,
-            notion_api_key=current_user.notion_api_key,
+            user=current_user,
         )
     except Exception as e:
         logger.error(f"Gemini agent error: {e}", exc_info=True)
@@ -321,7 +321,7 @@ async def regenerate_response(
         response_text, memory_context = await gemini_agent.chat(
             message=last_user_msg.content,
             conversation_history=history,
-            notion_api_key=current_user.notion_api_key,
+            user=current_user,
         )
     except Exception as e:
         logger.error(f"Gemini agent error during regenerate: {e}")
