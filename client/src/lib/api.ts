@@ -172,7 +172,7 @@ export const authApi = {
 };
 
 // Types
-export interface User { id: number; name: string; email: string; username: string; notion_api_key_configured: boolean; notion_pages?: any[]; }
+export interface User { id: number; name: string; email: string; username: string; notion_api_key_configured: boolean; notion_workspace_name?: string; notion_pages?: any[]; google_api_key_configured: boolean; google_account_email?: string; google_files?: any[]; }
 export interface Conversation { id: number; title: string; folder_id: number | null; is_pinned?: boolean; is_archived?: boolean; tags?: string[]; created_at: string; updated_at: string; messages: any[]; }
 export interface UploadedFile { id: number; filename: string; original_name?: string; is_image?: boolean; file_size: number; size?: number; content_type: string; created_at: string; url?: string; }
 export interface Template { id: number; title: string; content: string; variables: string[]; created_at: string; updated_at: string; }
@@ -315,4 +315,9 @@ export const notionApi = {
   createPage: (title: string) => request('/api/v1/notion/pages', { method: 'POST', body: JSON.stringify({ title }) }),
   deletePage: (pageId: string) => request(`/api/v1/notion/pages/${pageId}`, { method: 'DELETE' }),
   updatePage: (pageId: string, title: string) => request(`/api/v1/notion/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ title }) }),
+};
+
+// Integrations API
+export const integrationsApi = {
+  disconnectGoogle: () => request('/api/v1/integrations/google', { method: 'DELETE' }),
 };

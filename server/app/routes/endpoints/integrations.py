@@ -95,3 +95,110 @@ async def notion_callback(
     except Exception as e:
         logger.error(f"Error in Notion callback: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/google/authorize")
+async def google_authorize(
+    current_user: CurrentUser,
+):
+    """
+    Get the Google OAuth authorization URL.
+    """
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google integration not configured.")
+        
+    scopes = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email"
+    url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth?"
+        f"client_id={settings.GOOGLE_CLIENT_ID}&"
+        f"redirect_uri={settings.GOOGLE_REDIRECT_URI}&"
+        f"response_type=code&"
+        f"scope={scopes}&"
+        f"access_type=offline&"
+        f"prompt=consent"
+    )
+    return {"url": url}
+
+
+@router.post("/google/callback")
+async def google_callback(
+    code: str,
+    current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Handle the Google OAuth callback.
+    """
+    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="Google integration not configured.")
+        
+    try:
+        async with httpx.AsyncClient() as client:
+            # Exchange code for tokens
+            response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": settings.GOOGLE_CLIENT_ID,
+                    "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                    "code": code,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                },
+                timeout=15.0
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Google OAuth error: {response.text}")
+                raise HTTPException(status_code=400, detail="Failed to authenticate with Google")
+                
+            data = response.json()
+            access_token = data.get("access_token")
+            refresh_token = data.get("refresh_token")
+            
+            # Get user email
+            user_info_resp = await client.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            email = "Connected Account"
+            if user_info_resp.status_code == 200:
+                email = user_info_resp.json().get("email", email)
+            
+            # Encrypt and save tokens
+            current_user.google_access_token = encrypt_api_key(access_token)
+            if refresh_token:
+                current_user.google_refresh_token = encrypt_api_key(refresh_token)
+            current_user.google_account_email = email
+            
+            db.add(current_user)
+            await db.commit()
+            await db.refresh(current_user)
+            
+            # TODO: initialize google drive memory layer in background tasks
+            # background_tasks.add_task(initialize_google_memory_layer, access_token, current_user.id)
+            
+            return {"status": "success", "account_email": email}
+    except Exception as e:
+        logger.error(f"Error in Google callback: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/google")
+async def google_disconnect(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Disconnect Google Drive integration.
+    """
+    current_user.google_access_token = None
+    current_user.google_refresh_token = None
+    current_user.google_account_email = None
+    current_user.google_files = []
+    
+    db.add(current_user)
+    await db.commit()
+    
+    return {"status": "success", "message": "Google integration disconnected"}

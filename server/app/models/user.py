@@ -21,6 +21,13 @@ class User(Base):
     notion_workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     notion_workspace_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     notion_pages: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True, default=list)  # Selected Notion pages
+    
+    # Google Integration
+    google_access_token: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    google_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    google_account_email: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    google_files: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True, default=list)  # Stored memory files
+    
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

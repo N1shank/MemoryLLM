@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   ArrowLeft, User, Mail, AtSign, Lock, Trash2, 
-  Loader2, Check, AlertCircle, Eye, EyeOff, BookOpen, ExternalLink, X
+  Loader2, Check, AlertCircle, Eye, EyeOff, BookOpen, ExternalLink, X, HardDrive
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { userApi, ApiClientError, getAuthToken } from '@/lib/api';
+import { userApi, ApiClientError, getAuthToken, integrationsApi } from '@/lib/api';
 import { config } from '@/lib/config';
 
 export default function SettingsPage() {
@@ -36,6 +36,11 @@ export default function SettingsPage() {
   const [notionLoading, setNotionLoading] = useState(false);
   const [notionSuccess, setNotionSuccess] = useState(false);
   const [notionError, setNotionError] = useState('');
+
+  // Google integration
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleSuccess, setGoogleSuccess] = useState(false);
+  const [googleError, setGoogleError] = useState('');
 
   // Delete account
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -153,6 +158,45 @@ export default function SettingsPage() {
       setNotionError(e instanceof ApiClientError ? e.message : 'Failed to disconnect Notion');
     } finally {
       setNotionLoading(false);
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    setGoogleLoading(true);
+    setGoogleError('');
+    try {
+      const response = await fetch(`${config.apiUrl}/api/v1/integrations/google/authorize`, {
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to get Google authorization URL. Ensure Google integration is configured in backend.');
+      }
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setGoogleLoading(false);
+        setGoogleError('No authorization URL returned.');
+      }
+    } catch (e: any) {
+      setGoogleError(e.message || 'Failed to connect to Google');
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleDisconnectGoogle = async () => {
+    if (!confirm('Are you sure you want to disconnect Google Drive? The AI will lose access to its Google memory layer.')) return;
+    
+    setGoogleLoading(true);
+    try {
+      await integrationsApi.disconnectGoogle();
+      setGoogleSuccess(true);
+      await refreshUser();
+      setTimeout(() => setGoogleSuccess(false), 5000);
+    } catch (e) {
+      setGoogleError(e instanceof ApiClientError ? e.message : 'Failed to disconnect Google');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -402,6 +446,86 @@ export default function SettingsPage() {
               <p className="text-xs text-chat-muted mt-4">
                 <strong>Note:</strong> To add pages, go to your Notion workspace, open a page, click "..." → "Add connections" → Select your integration.
               </p>
+            </div>
+          )}
+        </section>
+
+        {/* Google Integration Section */}
+        <section className="bg-chat-sidebar rounded-xl border border-chat-border p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <HardDrive size={20} className="text-[#4285F4]" />
+              Google Drive Integration
+            </h2>
+            {user?.google_api_key_configured && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20">
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-green-400 text-sm font-medium">Connected</span>
+              </div>
+            )}
+          </div>
+
+          <p className="text-chat-muted text-sm mb-6">
+            Connect your Google Drive to allow the AI to store facts, notes, and skills directly in Google Docs.
+          </p>
+
+          {/* Connection Status */}
+          {user?.google_api_key_configured ? (
+            <div className="mb-6 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-3">
+                  <Check size={18} className="text-green-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-green-400 text-sm font-medium mb-1">
+                      Connected to {user.google_account_email || 'Google Account'}
+                    </p>
+                    <p className="text-chat-muted text-xs">
+                      The AI is actively using Google Drive as its memory layer.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleDisconnectGoogle}
+                  disabled={googleLoading}
+                  className="px-3 py-1.5 text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-md transition-colors"
+                >
+                  Disconnect
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-6">
+              <button
+                onClick={handleConnectGoogle}
+                disabled={googleLoading}
+                className="px-6 py-3 rounded-lg bg-[#4285F4] hover:bg-[#3367D6] disabled:opacity-50 font-medium transition-colors flex items-center gap-2 w-full justify-center text-white"
+              >
+                {googleLoading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Connecting to Google...
+                  </>
+                ) : (
+                  <>
+                    <HardDrive size={18} />
+                    Connect to Google Drive
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {googleError && (
+            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center gap-2">
+              <AlertCircle size={16} className="text-red-400" />
+              <span className="text-red-400 text-sm">{googleError}</span>
+            </div>
+          )}
+
+          {googleSuccess && (
+            <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center gap-2">
+              <Check size={16} className="text-green-400" />
+              <span className="text-green-400 text-sm">Google integration updated successfully!</span>
             </div>
           )}
         </section>

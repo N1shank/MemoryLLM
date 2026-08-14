@@ -72,7 +72,11 @@ async def get_profile(current_user: CurrentUser) -> UserResponse:
         email=current_user.email,
         username=current_user.username,
         notion_api_key_configured=bool(current_user.notion_api_key),
+        notion_workspace_name=current_user.notion_workspace_name,
         notion_pages=current_user.notion_pages or [],
+        google_api_key_configured=bool(current_user.google_access_token),
+        google_account_email=current_user.google_account_email,
+        google_files=current_user.google_files or [],
     )
 
 
@@ -116,7 +120,11 @@ async def update_profile(
         email=current_user.email,
         username=current_user.username,
         notion_api_key_configured=bool(current_user.notion_api_key),
+        notion_workspace_name=current_user.notion_workspace_name,
         notion_pages=current_user.notion_pages or [],
+        google_api_key_configured=bool(current_user.google_access_token),
+        google_account_email=current_user.google_account_email,
+        google_files=current_user.google_files or [],
     )
 
 

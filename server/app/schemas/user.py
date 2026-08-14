@@ -12,6 +12,9 @@ class UserResponse(BaseModel):
     notion_api_key_configured: bool = False
     notion_workspace_name: str | None = None
     notion_pages: list[dict] = []
+    google_api_key_configured: bool = False
+    google_account_email: str | None = None
+    google_files: list[dict] = []
 
     class Config:
         from_attributes = True

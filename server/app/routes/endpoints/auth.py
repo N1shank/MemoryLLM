@@ -60,6 +60,9 @@ async def signup(user_data: UserCreate, db: DBSession) -> Token:
             notion_api_key_configured=bool(user.notion_api_key),
             notion_workspace_name=user.notion_workspace_name,
             notion_pages=user.notion_pages or [],
+            google_api_key_configured=bool(user.google_access_token),
+            google_account_email=user.google_account_email,
+            google_files=user.google_files or [],
         ),
     )
 
@@ -101,6 +104,9 @@ async def login(credentials: UserLogin, db: DBSession) -> Token:
             notion_api_key_configured=bool(user.notion_api_key),
             notion_workspace_name=user.notion_workspace_name,
             notion_pages=user.notion_pages or [],
+            google_api_key_configured=bool(user.google_access_token),
+            google_account_email=user.google_account_email,
+            google_files=user.google_files or [],
         ),
     )
 
@@ -136,6 +142,11 @@ async def refresh_token(request: RefreshRequest, db: DBSession) -> Token:
             email=user.email,
             username=user.username,
             notion_api_key_configured=bool(user.notion_api_key),
+            notion_workspace_name=user.notion_workspace_name,
+            notion_pages=user.notion_pages or [],
+            google_api_key_configured=bool(user.google_access_token),
+            google_account_email=user.google_account_email,
+            google_files=user.google_files or [],
         ),
     )
 
@@ -155,5 +166,8 @@ async def get_me(
         notion_api_key_configured=bool(current_user.notion_api_key),
         notion_workspace_name=current_user.notion_workspace_name,
         notion_pages=current_user.notion_pages or [],
+        google_api_key_configured=bool(current_user.google_access_token),
+        google_account_email=current_user.google_account_email,
+        google_files=current_user.google_files or [],
     )
 
