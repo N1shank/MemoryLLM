@@ -16,14 +16,14 @@ from app.models.user import User
 logger = logging.getLogger(__name__)
 
 
-SYSTEM_PROMPT = """You are an intelligent AI assistant with access to a structured Notion workspace as your memory layer.
+SYSTEM_PROMPT = """You are an intelligent AI assistant with access to structured memory layers (Notion and/or Google Drive).
 
-You have access to specialized databases:
+You have access to specialized databases/documents:
 - Facts & Notes: For storing facts, preferences, and long-term knowledge about the user.
 - Skills: For instructions on how you should behave or perform tasks.
 - Projects & Tasks: For tracking actionable items.
 
-When the user shares important information, proactively save it to the appropriate database.
+When the user shares important information, proactively save it to the appropriate memory layer using your tools.
 Always query your memory before answering personalized questions.
 Be helpful, concise, and leverage your structured memory capabilities."""
 
@@ -47,41 +47,58 @@ class AGYAgent:
         Yields:
             tuple of (chunk_text, memory_context) for each token
         """
-        decrypted_key = None
+        decrypted_notion_key = None
         if user.notion_api_key:
-            decrypted_key = decrypt_api_key(user.notion_api_key)
+            decrypted_notion_key = decrypt_api_key(user.notion_api_key)
 
-        dashboard_id = None
-        facts_db_id = None
-        projects_db_id = None
-        skills_db_id = None
+        decrypted_google_access = None
+        decrypted_google_refresh = None
+        if user.google_access_token:
+            decrypted_google_access = decrypt_api_key(user.google_access_token)
+        if user.google_refresh_token:
+            decrypted_google_refresh = decrypt_api_key(user.google_refresh_token)
+
+        notion_dashboard_id = None
+        notion_facts_db_id = None
+        notion_projects_db_id = None
+        notion_skills_db_id = None
         
         if user.notion_pages:
             for page in user.notion_pages:
                 role = page.get("role")
                 if role == "dashboard":
-                    dashboard_id = page.get("id")
+                    notion_dashboard_id = page.get("id")
                 elif role == "facts":
-                    facts_db_id = page.get("id")
+                    notion_facts_db_id = page.get("id")
                 elif role == "projects":
-                    projects_db_id = page.get("id")
+                    notion_projects_db_id = page.get("id")
                 elif role == "skills":
-                    skills_db_id = page.get("id")
-                elif not dashboard_id:
-                    # Fallback to first page if no roles defined
-                    dashboard_id = page.get("id")
+                    notion_skills_db_id = page.get("id")
+                elif not notion_dashboard_id:
+                    notion_dashboard_id = page.get("id")
+
+        google_facts_doc_id = None
+        google_projects_doc_id = None
+        
+        if user.google_files:
+            for page in user.google_files:
+                role = page.get("role")
+                if role == "facts":
+                    google_facts_doc_id = page.get("id")
+                elif role == "projects":
+                    google_projects_doc_id = page.get("id")
 
         tools = []
         
-        if decrypted_key:
-            async def search_workspace(query: str) -> dict:
+        if decrypted_notion_key:
+            async def search_notion(query: str) -> dict:
                 """Search across the entire Notion workspace for any information."""
                 try:
                     async with httpx.AsyncClient(timeout=10.0) as client:
                         response = await client.post(
                             "https://api.notion.com/v1/search",
                             headers={
-                                "Authorization": f"Bearer {decrypted_key}",
+                                "Authorization": f"Bearer {decrypted_notion_key}",
                                 "Notion-Version": "2022-06-28",
                                 "Content-Type": "application/json",
                             },
@@ -91,42 +108,22 @@ class AGYAgent:
                 except Exception as e:
                     return {"error": str(e)}
 
-            async def save_fact(fact_title: str, category: str = "General") -> dict:
-                """Save a fact or note about the user to the Facts & Notes database."""
-                if not facts_db_id:
-                    # Fallback to standard page creation if DB not set up
-                    if not dashboard_id:
-                        return {"error": "No Notion integration configured."}
-                    try:
-                        async with httpx.AsyncClient(timeout=10.0) as client:
-                            res = await client.post(
-                                "https://api.notion.com/v1/pages",
-                                headers={
-                                    "Authorization": f"Bearer {decrypted_key}",
-                                    "Notion-Version": "2022-06-28",
-                                    "Content-Type": "application/json",
-                                },
-                                json={
-                                    "parent": {"type": "page_id", "page_id": dashboard_id},
-                                    "properties": {"title": {"title": [{"text": {"content": f"[{category}] {fact_title}"}}]}}
-                                }
-                            )
-                            return res.json()
-                    except Exception as e:
-                        return {"error": str(e)}
-                        
+            async def save_fact_to_notion(fact_title: str, category: str = "General") -> dict:
+                """Save a fact or note about the user to the Notion Facts database."""
+                if not notion_facts_db_id:
+                    return {"error": "Notion Facts database not configured."}
                 try:
                     import datetime
                     async with httpx.AsyncClient(timeout=10.0) as client:
                         response = await client.post(
                             "https://api.notion.com/v1/pages",
                             headers={
-                                "Authorization": f"Bearer {decrypted_key}",
+                                "Authorization": f"Bearer {decrypted_notion_key}",
                                 "Notion-Version": "2022-06-28",
                                 "Content-Type": "application/json",
                             },
                             json={
-                                "parent": {"type": "database_id", "database_id": facts_db_id},
+                                "parent": {"type": "database_id", "database_id": notion_facts_db_id},
                                 "properties": {
                                     "Title": {"title": [{"text": {"content": fact_title}}]},
                                     "Category": {"select": {"name": category}},
@@ -138,10 +135,10 @@ class AGYAgent:
                 except Exception as e:
                     return {"error": str(e)}
                     
-            async def save_task(task_title: str, due_date_iso: str = None) -> dict:
-                """Save a task to the Projects & Tasks database."""
-                if not projects_db_id:
-                    return {"error": "Projects database not configured."}
+            async def save_task_to_notion(task_title: str, due_date_iso: str = None) -> dict:
+                """Save a task to the Notion Projects database."""
+                if not notion_projects_db_id:
+                    return {"error": "Notion Projects database not configured."}
                 try:
                     props = {
                         "Project": {"title": [{"text": {"content": task_title}}]},
@@ -154,12 +151,12 @@ class AGYAgent:
                         response = await client.post(
                             "https://api.notion.com/v1/pages",
                             headers={
-                                "Authorization": f"Bearer {decrypted_key}",
+                                "Authorization": f"Bearer {decrypted_notion_key}",
                                 "Notion-Version": "2022-06-28",
                                 "Content-Type": "application/json",
                             },
                             json={
-                                "parent": {"type": "database_id", "database_id": projects_db_id},
+                                "parent": {"type": "database_id", "database_id": notion_projects_db_id},
                                 "properties": props
                             }
                         )
@@ -167,7 +164,58 @@ class AGYAgent:
                 except Exception as e:
                     return {"error": str(e)}
 
-            tools = [search_workspace, save_fact, save_task]
+            tools.extend([search_notion, save_fact_to_notion, save_task_to_notion])
+
+        if decrypted_google_access:
+            def _get_google_creds():
+                from google.oauth2.credentials import Credentials
+                from app.core.config import settings
+                return Credentials(
+                    token=decrypted_google_access,
+                    refresh_token=decrypted_google_refresh,
+                    token_uri="https://oauth2.googleapis.com/token",
+                    client_id=settings.GOOGLE_CLIENT_ID,
+                    client_secret=settings.GOOGLE_CLIENT_SECRET,
+                )
+
+            async def save_fact_to_google(fact_text: str) -> dict:
+                """Save a fact or note about the user to the Google Drive Facts Document."""
+                if not google_facts_doc_id:
+                    return {"error": "Google Facts document not configured."}
+                try:
+                    import datetime
+                    from googleapiclient.discovery import build
+                    docs_service = build('docs', 'v1', credentials=_get_google_creds())
+                    
+                    text_to_insert = f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}] {fact_text}\n"
+                    requests = [{'insertText': {'location': {'index': 1}, 'text': text_to_insert}}]
+                    docs_service.documents().batchUpdate(documentId=google_facts_doc_id, body={'requests': requests}).execute()
+                    
+                    return {"status": "success"}
+                except Exception as e:
+                    return {"error": str(e)}
+
+            async def save_task_to_google(task_text: str, due_date: str = "") -> dict:
+                """Save an actionable task to the Google Drive Projects Document."""
+                if not google_projects_doc_id:
+                    return {"error": "Google Projects document not configured."}
+                try:
+                    from googleapiclient.discovery import build
+                    docs_service = build('docs', 'v1', credentials=_get_google_creds())
+                    
+                    text_to_insert = f"[TODO] {task_text} "
+                    if due_date:
+                        text_to_insert += f"(Due: {due_date})"
+                    text_to_insert += "\n"
+                    
+                    requests = [{'insertText': {'location': {'index': 1}, 'text': text_to_insert}}]
+                    docs_service.documents().batchUpdate(documentId=google_projects_doc_id, body={'requests': requests}).execute()
+                    
+                    return {"status": "success"}
+                except Exception as e:
+                    return {"error": str(e)}
+            
+            tools.extend([save_fact_to_google, save_task_to_google])
 
         # Prepare config
         config = LocalAgentConfig(

@@ -176,8 +176,14 @@ async def google_callback(
             await db.commit()
             await db.refresh(current_user)
             
-            # TODO: initialize google drive memory layer in background tasks
-            # background_tasks.add_task(initialize_google_memory_layer, access_token, current_user.id)
+            # Setup Google drive memory layer asynchronously
+            from app.services.google_memory_layer import initialize_google_memory_layer
+            background_tasks.add_task(
+                initialize_google_memory_layer, 
+                access_token, 
+                refresh_token, 
+                current_user.id
+            )
             
             return {"status": "success", "account_email": email}
     except Exception as e:

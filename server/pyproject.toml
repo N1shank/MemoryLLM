@@ -25,6 +25,9 @@ dependencies = [
     "sse-starlette>=1.8.0",
     "wikipedia (>=1.4.0,<2.0.0)",
     "google-antigravity (>=0.1.10,<0.2.0)",
+    "google-api-python-client (>=2.198.0,<3.0.0)",
+    "google-auth (>=2.56.3,<3.0.0)",
+    "httpx-oauth (>=0.17.0,<0.18.0)",
 ]
 
 [project.optional-dependencies]
