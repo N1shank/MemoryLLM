@@ -124,10 +124,22 @@ async function request(endpoint: string, options: RequestInit = {}) {
             isRefreshing = false;
           }
         } else {
-          return new Promise((resolve) => {
+          return new Promise((resolve, reject) => {
             subscribeTokenRefresh(async (newToken) => {
-              headers.set('Authorization', `Bearer ${newToken}`);
-              resolve(await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers }));
+              try {
+                headers.set('Authorization', `Bearer ${newToken}`);
+                const retryRes = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
+                if (!retryRes.ok) {
+                  let data;
+                  try { data = await retryRes.json(); } catch { data = { detail: retryRes.statusText }; }
+                  reject(new ApiClientError(data.detail || 'API request failed', retryRes.status, data));
+                  return;
+                }
+                if (retryRes.status === 204) { resolve(null); return; }
+                resolve(await retryRes.json());
+              } catch (e) {
+                reject(e);
+              }
             });
           });
         }
