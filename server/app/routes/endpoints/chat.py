@@ -316,10 +316,6 @@ async def regenerate_response(
     if not last_user_msg or not last_assistant_msg:
         raise NotFoundError("Cannot regenerate: need both user and assistant messages")
     
-    # Delete the last assistant message
-    await db.delete(last_assistant_msg)
-    await db.flush()
-    
     # Build conversation history up to (but not including) the last user message
     history = []
     for msg in messages:
@@ -327,10 +323,16 @@ async def regenerate_response(
             break
         history.append({"role": msg.role, "content": msg.content})
     
-    # Regenerate AI response
+    # Capture IDs before making the LLM call
+    last_user_content = last_user_msg.content
+    assistant_msg_id = last_assistant_msg.id
+    conversation_id = conversation.id
+    
+    # Get AI response FIRST — before modifying the database.
+    # This avoids holding the DB transaction open during the entire LLM generation.
     try:
         response_text, memory_context = await gemini_agent.chat(
-            message=last_user_msg.content,
+            message=last_user_content,
             conversation_history=history,
             user=current_user,
         )
@@ -338,9 +340,16 @@ async def regenerate_response(
         logger.error(f"Gemini agent error during regenerate: {e}")
         raise ServiceUnavailableError(f"AI service error: {str(e)}")
     
+    # Now do a quick delete + insert transaction
+    # Re-fetch the message to delete (session may have expired during the LLM call)
+    old_msg_result = await db.execute(select(Message).where(Message.id == assistant_msg_id))
+    old_msg = old_msg_result.scalar_one_or_none()
+    if old_msg:
+        await db.delete(old_msg)
+    
     # Save new assistant message
     new_assistant_message = Message(
-        conversation_id=conversation.id,
+        conversation_id=conversation_id,
         role="assistant",
         content=response_text,
         memory_context=memory_context,
