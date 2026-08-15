@@ -60,6 +60,14 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
+    @property
+    def notion_api_key_configured(self) -> bool:
+        return bool(self.notion_api_key)
+
+    @property
+    def google_api_key_configured(self) -> bool:
+        return bool(self.google_access_token)
+
     def __repr__(self) -> str:
         return f"<User {self.username}>"
 
