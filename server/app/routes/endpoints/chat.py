@@ -170,9 +170,20 @@ async def chat_stream(
     
     conversation_id = conversation.id
     
-    # Capture user's notion_api_key before the response starts, because
-    # the DB session will be closed by the time the generator runs
-    user_notion_api_key = current_user.notion_api_key
+    # Snapshot all user fields the agent needs BEFORE the DB session closes.
+    # The generator runs after the response starts, at which point the session
+    # is closed and accessing lazy-loaded ORM attributes would crash with
+    # DetachedInstanceError.
+    class UserSnapshot:
+        """Lightweight stand-in for User that holds only the fields the agent needs."""
+        def __init__(self, u):
+            self.notion_api_key = u.notion_api_key
+            self.notion_pages = u.notion_pages or []
+            self.google_access_token = u.google_access_token
+            self.google_refresh_token = u.google_refresh_token
+            self.google_files = u.google_files or []
+    
+    user_snapshot = UserSnapshot(current_user)
     
     async def generate_stream() -> AsyncGenerator[str, None]:
         """Generate SSE stream of response tokens."""
@@ -183,7 +194,7 @@ async def chat_stream(
             async for chunk, context in gemini_agent.chat_stream(
                 message=request.message,
                 conversation_history=history,
-                user=current_user,
+                user=user_snapshot,
                 files=request.files,
             ):
                 full_response += chunk
