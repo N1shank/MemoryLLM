@@ -248,9 +248,23 @@ class AGYAgent:
             
             tools.extend([save_fact_to_google, save_task_to_google])
 
+        # Build dynamic system prompt based on connected integrations
+        has_notion = bool(decrypted_notion_key)
+        has_google = bool(decrypted_google_access)
+        
+        dynamic_prompt = SYSTEM_PROMPT
+        if has_notion and has_google:
+            dynamic_prompt += "\n\nIMPORTANT: The user has both Notion and Google Drive connected. Use Notion tools (save_fact_to_notion, save_task_to_notion) as the primary memory layer for structured data. Use Google tools (save_fact_to_google, save_task_to_google) as a secondary backup or when the user explicitly asks to save to Google Drive."
+        elif has_notion:
+            dynamic_prompt += "\n\nThe user has Notion connected as their memory layer. Use the Notion tools to save and retrieve information."
+        elif has_google:
+            dynamic_prompt += "\n\nThe user has Google Drive connected as their memory layer. Use the Google tools to save information to their Google Docs."
+        else:
+            dynamic_prompt += "\n\nNo memory layer is connected. You cannot save persistent memories. Suggest the user connect Notion or Google Drive in Settings."
+
         # Prepare config
         config = LocalAgentConfig(
-            system_instructions=SYSTEM_PROMPT,
+            system_instructions=dynamic_prompt,
             tools=tools,
         )
 
