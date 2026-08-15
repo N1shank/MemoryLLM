@@ -208,3 +208,22 @@ async def google_disconnect(
     await db.commit()
     
     return {"status": "success", "message": "Google integration disconnected"}
+
+
+@router.delete("/notion")
+async def notion_disconnect(
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Disconnect Notion integration.
+    """
+    current_user.notion_api_key = None
+    current_user.notion_workspace_id = None
+    current_user.notion_workspace_name = None
+    current_user.notion_pages = []
+    
+    db.add(current_user)
+    await db.commit()
+    
+    return {"status": "success", "message": "Notion integration disconnected"}
