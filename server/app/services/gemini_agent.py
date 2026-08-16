@@ -10,7 +10,7 @@ from google.antigravity import Agent, LocalAgentConfig
 from google.antigravity.types import Image
 
 from app.core.config import settings
-from app.core.security import decrypt_api_key
+from app.core.security import decrypt_api_key, encrypt_api_key
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -186,16 +186,36 @@ class AGYAgent:
             tools.extend([search_notion, save_fact_to_notion, save_task_to_notion])
 
         if decrypted_google_access:
+            from google.oauth2.credentials import Credentials as GoogleCredentials
+            from app.core.config import settings as app_settings
+            
+            _google_creds = GoogleCredentials(
+                token=decrypted_google_access,
+                refresh_token=decrypted_google_refresh,
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=app_settings.GOOGLE_CLIENT_ID,
+                client_secret=app_settings.GOOGLE_CLIENT_SECRET,
+            )
+            _original_token = decrypted_google_access
+
             def _get_google_creds():
-                from google.oauth2.credentials import Credentials
-                from app.core.config import settings
-                return Credentials(
-                    token=decrypted_google_access,
-                    refresh_token=decrypted_google_refresh,
-                    token_uri="https://oauth2.googleapis.com/token",
-                    client_id=settings.GOOGLE_CLIENT_ID,
-                    client_secret=settings.GOOGLE_CLIENT_SECRET,
-                )
+                return _google_creds
+
+            async def _persist_refreshed_token_if_needed():
+                """If google-auth auto-refreshed the token, save it back to the DB."""
+                if _google_creds.token and _google_creds.token != _original_token:
+                    try:
+                        from app.core.database import async_session
+                        from app.models.user import User as UserModel
+                        async with async_session() as db:
+                            u = await db.get(UserModel, user.id if hasattr(user, 'id') else None)
+                            if u:
+                                u.google_access_token = encrypt_api_key(_google_creds.token)
+                                db.add(u)
+                                await db.commit()
+                                logger.info("Persisted refreshed Google access token to DB")
+                    except Exception as e:
+                        logger.error(f"Failed to persist refreshed Google token: {e}")
 
             async def save_fact_to_google(fact_text: str) -> dict:
                 """Save a fact or note about the user to the Google Drive Facts Document."""
@@ -215,6 +235,7 @@ class AGYAgent:
                         ).execute
                     )
                     
+                    await _persist_refreshed_token_if_needed()
                     return {"status": "success"}
                 except Exception as e:
                     logger.error(f"save_fact_to_google failed: {e}", exc_info=True)
@@ -241,6 +262,7 @@ class AGYAgent:
                         ).execute
                     )
                     
+                    await _persist_refreshed_token_if_needed()
                     return {"status": "success"}
                 except Exception as e:
                     logger.error(f"save_task_to_google failed: {e}", exc_info=True)
