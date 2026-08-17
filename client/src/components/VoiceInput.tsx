@@ -63,6 +63,9 @@ export function VoiceInput({ onTranscript, disabled, isBrainDump = false }: Voic
     };
 
     return () => {
+      if (recognition) {
+        try { recognition.stop(); } catch {}
+      }
       recognition.onresult = null;
       recognition.onerror = null;
       recognition.onend = null;
