@@ -169,7 +169,16 @@ export default function Home() {
     
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files);
+      const acceptedExts = ['.jpg','.jpeg','.png','.gif','.webp','.svg','.pdf','.doc','.docx','.txt','.md','.csv','.json','.py','.js','.ts','.html','.css','.yaml','.yml'];
+      
       for (const file of files) {
+        const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+        if (!acceptedExts.includes(ext)) {
+          setError(`File type ${ext} not supported`);
+          setTimeout(() => setError(null), 3000);
+          continue;
+        }
+
         try {
           const uploaded = await filesApi.upload(file as any);
           setPendingAttachments(prev => [...prev, uploaded]);
@@ -559,14 +568,14 @@ export default function Home() {
     setError(null);
 
     const userMessage: LocalMessage = {
-      id: `temp-${Date.now()}`,
+      id: `temp-${crypto.randomUUID()}`,
       role: 'user',
       content: content.trim(),
       memory_context: null,
     };
 
     const assistantMessage: LocalMessage = {
-      id: `temp-${Date.now() + 1}`,
+      id: `temp-${crypto.randomUUID()}`,
       role: 'assistant',
       content: '',
       memory_context: null,
@@ -692,7 +701,7 @@ export default function Home() {
 
     // Send with attachments
     const userMessage: LocalMessage = {
-      id: `temp-${Date.now()}`,
+      id: `temp-${crypto.randomUUID()}`,
       role: 'user',
       content: input.trim(),
       memory_context: null,
@@ -700,7 +709,7 @@ export default function Home() {
     };
 
     const assistantMessage: LocalMessage = {
-      id: `temp-${Date.now() + 1}`,
+      id: `temp-${crypto.randomUUID()}`,
       role: 'assistant',
       content: '',
       memory_context: null,

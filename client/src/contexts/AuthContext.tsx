@@ -161,9 +161,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         notion_api_key_configured: updatedUser.notion_api_key_configured 
       });
     } catch (e) {
-      // If refresh fails, user might be logged out
       console.error('[AuthContext] Failed to refresh user:', e);
-      // Don't clear auth state on refresh failure - might be temporary network issue
+      if (e instanceof ApiClientError && e.isUnauthorized) {
+        clearAuthToken();
+        setUser(null);
+      }
     }
   }, []);
 

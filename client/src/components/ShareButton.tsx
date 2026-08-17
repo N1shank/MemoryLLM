@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Share2, Link, Check, Loader2, X, Globe, Lock } from 'lucide-react';
 import { shareApi, ShareStatus, ApiClientError } from '@/lib/api';
 
@@ -15,6 +15,13 @@ export function ShareButton({ conversationId }: ShareButtonProps) {
   const [isToggling, setIsToggling] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   const loadStatus = useCallback(async () => {
     setIsLoading(true);
@@ -57,7 +64,8 @@ export function ShareButton({ conversationId }: ShareButtonProps) {
     try {
       await navigator.clipboard.writeText(fullUrl);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       setError('Failed to copy link');
     }

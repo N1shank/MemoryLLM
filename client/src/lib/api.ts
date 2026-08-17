@@ -178,18 +178,21 @@ async function request(endpoint: string, options: RequestInit = {}) {
 
 // Auth API
 export const authApi = {
-  login: (data: any) => request('/api/v1/auth/login', { method: 'POST', body: JSON.stringify(data) }),
-  signup: (data: any) => request('/api/v1/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
+  login: (data: Record<string, unknown>) => request('/api/v1/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+  signup: (data: Record<string, unknown>) => request('/api/v1/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
   getMe: () => request('/api/v1/auth/me'),
 };
 
 // Types
-export interface User { id: number; name: string; email: string; username: string; notion_api_key_configured: boolean; notion_workspace_name?: string; notion_pages?: any[]; google_api_key_configured: boolean; google_account_email?: string; google_files?: any[]; }
-export interface Conversation { id: number; title: string; folder_id: number | null; is_pinned?: boolean; is_archived?: boolean; tags?: string[]; created_at: string; updated_at: string; messages: any[]; }
+export interface Message { id: number; role: 'user' | 'assistant' | 'system'; content: string; created_at: string; memory_context?: string; feedback?: 'up' | 'down' | null; }
+export interface MemoryDocument { id: string; title: string; role?: string; [key: string]: unknown; }
+
+export interface User { id: number; name: string; email: string; username: string; notion_api_key_configured: boolean; notion_workspace_name?: string; notion_pages?: MemoryDocument[]; google_api_key_configured: boolean; google_account_email?: string; google_files?: MemoryDocument[]; }
+export interface Conversation { id: number; title: string; folder_id: number | null; is_pinned?: boolean; is_archived?: boolean; tags?: string[]; created_at: string; updated_at: string; messages: Message[]; }
 export interface UploadedFile { id: number; filename: string; original_name?: string; is_image?: boolean; file_size: number; size?: number; content_type: string; created_at: string; url?: string; }
 export interface Template { id: number; title: string; content: string; variables: string[]; created_at: string; updated_at: string; }
 export interface Folder { id: number; name: string; conversation_count?: number; created_at: string; updated_at: string; }
-export interface SharedConversation { token: string; title: string; messages: any[]; created_at: string; expires_at?: string; }
+export interface SharedConversation { token: string; title: string; messages: Message[]; created_at: string; expires_at?: string; }
 export interface ShareStatus { is_shared: boolean; share_token?: string; share_url?: string; expires_at?: string; }
 
 // Conversations API
@@ -197,7 +200,7 @@ export const conversationsApi = {
   list: (limit = 50, offset = 0) => request(`/api/v1/conversations?limit=${limit}&offset=${offset}`),
   get: (id: number) => request(`/api/v1/conversations/${id}`),
   search: (query: string) => request(`/api/v1/conversations/search?query=${encodeURIComponent(query)}`),
-  create: (data: any) => request('/api/v1/conversations', { method: 'POST', body: JSON.stringify(data) }),
+  create: (data: Record<string, unknown>) => request('/api/v1/conversations', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, title: string) => request(`/api/v1/conversations/${id}`, { method: 'PUT', body: JSON.stringify({ title }) }),
   delete: (id: number) => request(`/api/v1/conversations/${id}`, { method: 'DELETE' }),
   updateFolder: (id: number, folder_id: number | null) => request(`/api/v1/conversations/${id}/folder`, { method: 'PUT', body: JSON.stringify({ folder_id }) }),
@@ -341,18 +344,19 @@ export const templatesApi = {
 
 // Drafts API
 export const draftsApi = {
-  list: () => request('/api/v1/drafts'),
-  createOrUpdate: (conversation_id: number, content: string) => request('/api/v1/drafts', { method: 'POST', body: JSON.stringify({ conversation_id, content }) }),
+  getGlobal: () => request('/api/v1/drafts/global'),
+  getForConversation: (conversationId: number) => request(`/api/v1/drafts/conversation/${conversationId}`),
+  create: (content: string, conversation_id?: number) => request('/api/v1/drafts', { method: 'POST', body: JSON.stringify({ content, conversation_id }) }),
   createGlobal: (content: string) => request('/api/v1/drafts/global', { method: 'POST', body: JSON.stringify({ content }) }),
-  getForConversation: (conversation_id: number) => request(`/api/v1/drafts/conversation/${conversation_id}`),
-  update: (id: number, data: any) => request(`/api/v1/drafts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  update: (id: number, data: Record<string, unknown>) => request(`/api/v1/drafts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => request(`/api/v1/drafts/${id}`, { method: 'DELETE' }),
+  createOrUpdate: (conversation_id: number, content: string) => request('/api/v1/drafts', { method: 'POST', body: JSON.stringify({ conversation_id, content }) }),
   deleteForConversation: (conversationId: number) => request(`/api/v1/drafts/conversation/${conversationId}`, { method: 'DELETE' }),
 };
 
 // Share API
 export const shareApi = {
-  create: (conversationId: number, data: any) => request(`/api/v1/share/conversations/${conversationId}`, { method: 'POST', body: JSON.stringify(data) }),
+  create: (conversationId: number, data: Record<string, unknown>) => request(`/api/v1/share/conversations/${conversationId}`, { method: 'POST', body: JSON.stringify(data) }),
   getStatus: (conversationId: number) => request(`/api/v1/share/conversations/${conversationId}/status`),
   get: (token: string) => request(`/api/v1/share/${token}`),
   toggleSharing: (conversationId: number) => request(`/api/v1/share/conversations/${conversationId}/toggle`, { method: 'POST' }),
@@ -363,21 +367,26 @@ export const filesApi = {
   upload: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return request('/api/v1/files/upload', { method: 'POST', body: formData });
+    return request('/api/v1/files/upload', {
+      method: 'POST',
+      body: formData,
+    });
   },
-  delete: (id: number) => request(`/api/v1/files/${id}`, { method: 'DELETE' }),
+  delete: (fileId: number) => request(`/api/v1/files/${fileId}`, { method: 'DELETE' }),
 };
 
 // User API
 export const userApi = {
-  getSettings: () => request('/api/v1/users/me/settings'),
-  updateSettings: (data: any) => request('/api/v1/users/me/settings', { method: 'PATCH', body: JSON.stringify(data) }),
-  updateProfile: (data: any) => request('/api/v1/users/me', { method: 'PATCH', body: JSON.stringify(data) }),
-  changePassword: (current_password: string, new_password: string) => request('/api/v1/users/me/password', { method: 'POST', body: JSON.stringify({ current_password, new_password }) }),
-  updateNotionApiKey: (api_key: string | null) => request('/api/v1/users/me/notion-api-key', { method: 'POST', body: JSON.stringify({ api_key }) }),
+  updateSettings: (data: Record<string, unknown>) => request('/api/v1/users/me/settings', { method: 'PATCH', body: JSON.stringify(data) }),
+  updateProfile: (data: Record<string, unknown>) => request('/api/v1/users/me', { method: 'PATCH', body: JSON.stringify(data) }),
+  changePassword: (current_password: string, new_password: string) => 
+    request('/api/v1/users/me/password', { method: 'POST', body: JSON.stringify({ current_password, new_password }) }),
+  updateNotionApiKey: (api_key: string | null) => 
+    request('/api/v1/users/me/notion-key', { method: 'POST', body: JSON.stringify({ api_key }) }),
+  updateNotionPages: (pages: MemoryDocument[]) => request('/api/v1/users/me/notion-pages', { method: 'POST', body: JSON.stringify({ pages }) }),
   validateNotionApiKey: (api_key: string) => request('/api/v1/users/me/notion-api-key/validate', { method: 'POST', body: JSON.stringify({ api_key }) }),
   deleteAccount: () => request('/api/v1/users/me', { method: 'DELETE' }),
-  updateNotionPages: (pages: any[]) => request('/api/v1/users/me/notion-pages', { method: 'POST', body: JSON.stringify({ pages }) }),
+  getSettings: () => request('/api/v1/users/me/settings'),
 };
 
 // Notion API

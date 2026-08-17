@@ -36,8 +36,6 @@ class Settings(BaseSettings):
     NOTION_CLIENT_ID: str = ""
     NOTION_CLIENT_SECRET: str = ""
     NOTION_REDIRECT_URI: str = "http://localhost:3000/settings/notion/callback"
-    NOTION_MCP_SERVER_PATH: str = "npx"
-    NOTION_MCP_SERVER_ARGS: list[str] = ["-y", "@notionhq/notion-mcp-server"]
 
     # Google Integration
     GOOGLE_CLIENT_ID: str = ""

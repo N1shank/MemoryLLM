@@ -125,6 +125,7 @@ class AGYAgent:
                         )
                         return response.json()
                 except Exception as e:
+                    logger.error(f"search_notion failed: {e}", exc_info=True)
                     return {"error": str(e)}
 
             async def save_fact_to_notion(fact_title: str, category: str = "General") -> dict:
@@ -152,6 +153,7 @@ class AGYAgent:
                         )
                         return response.json()
                 except Exception as e:
+                    logger.error(f"save_fact_to_notion failed: {e}", exc_info=True)
                     return {"error": str(e)}
                     
             async def save_task_to_notion(task_title: str, due_date_iso: str = None) -> dict:
@@ -181,6 +183,7 @@ class AGYAgent:
                         )
                         return response.json()
                 except Exception as e:
+                    logger.error(f"save_task_to_notion failed: {e}", exc_info=True)
                     return {"error": str(e)}
 
             tools.extend([search_notion, save_fact_to_notion, save_task_to_notion])

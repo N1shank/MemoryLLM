@@ -48,7 +48,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Always provide context, even before mount
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
-      {mounted ? children : null}
+      <div style={{ visibility: mounted ? 'visible' : 'hidden', display: 'contents' }}>
+        {children}
+      </div>
     </ThemeContext.Provider>
   );
 }

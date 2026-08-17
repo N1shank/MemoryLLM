@@ -124,7 +124,12 @@ async def refresh_token(request: RefreshRequest, db: DBSession) -> Token:
     if not user_id:
         raise UnauthorizedError("Invalid refresh token")
         
-    result = await db.execute(select(User).where(User.id == int(user_id)))
+    try:
+        parsed_user_id = int(user_id)
+    except ValueError:
+        raise UnauthorizedError("Invalid refresh token format")
+        
+    result = await db.execute(select(User).where(User.id == parsed_user_id))
     user = result.scalar_one_or_none()
     
     if not user:

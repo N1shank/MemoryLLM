@@ -153,15 +153,25 @@ async def update_folder(
         if data.parent_id == folder.id:
             raise ForbiddenError("Folder cannot be its own parent")
         if data.parent_id:
-            parent_result = await db.execute(
-                select(Folder).where(
-                    Folder.id == data.parent_id,
-                    Folder.user_id == current_user.id,
+            curr_parent_id = data.parent_id
+            while curr_parent_id:
+                if curr_parent_id == folder.id:
+                    raise ForbiddenError("Circular folder dependency detected")
+                
+                parent_result = await db.execute(
+                    select(Folder).where(
+                        Folder.id == curr_parent_id,
+                        Folder.user_id == current_user.id,
+                    )
                 )
-            )
-            parent = parent_result.scalar_one_or_none()
-            if not parent:
-                raise NotFoundError("Parent folder not found")
+                parent = parent_result.scalar_one_or_none()
+                
+                if not parent:
+                    if curr_parent_id == data.parent_id:
+                        raise NotFoundError("Parent folder not found")
+                    break
+                
+                curr_parent_id = parent.parent_id
         folder.parent_id = data.parent_id
     
     if "name" in update_data:
