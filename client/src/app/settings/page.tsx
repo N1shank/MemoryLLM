@@ -144,7 +144,7 @@ export default function SettingsPage() {
     
     setNotionLoading(true);
     try {
-      await userApi.updateNotionApiKey(null);
+      await integrationsApi.disconnectNotion();
       setNotionSuccess(true);
       await refreshUser();
       setTimeout(() => setNotionSuccess(false), 5000);

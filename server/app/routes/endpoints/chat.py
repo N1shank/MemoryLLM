@@ -177,6 +177,7 @@ async def chat_stream(
     class UserSnapshot:
         """Lightweight stand-in for User that holds only the fields the agent needs."""
         def __init__(self, u):
+            self.id = u.id
             self.notion_api_key = u.notion_api_key
             self.notion_pages = u.notion_pages or []
             self.google_access_token = u.google_access_token

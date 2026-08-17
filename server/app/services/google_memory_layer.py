@@ -26,7 +26,7 @@ async def initialize_google_memory_layer(access_token: str, refresh_token: str, 
             client_secret=settings.GOOGLE_CLIENT_SECRET,
         )
         
-        drive_service = build('drive', 'v3', credentials=creds)
+        drive_service = await asyncio.to_thread(build, 'drive', 'v3', credentials=creds)
         
         # 1. Create the main folder
         folder_metadata = {
@@ -50,7 +50,7 @@ async def initialize_google_memory_layer(access_token: str, refresh_token: str, 
         memory_files = []
         memory_files.append({"role": "dashboard", "id": folder_id, "title": "MemoryLLM Dashboard"})
         
-        docs_service = build('docs', 'v1', credentials=creds)
+        docs_service = await asyncio.to_thread(build, 'docs', 'v1', credentials=creds)
         
         for doc_info in docs_to_create:
             # Create a Document

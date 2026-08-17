@@ -225,7 +225,9 @@ class AGYAgent:
                     import asyncio
                     import datetime
                     from googleapiclient.discovery import build
-                    docs_service = build('docs', 'v1', credentials=_get_google_creds())
+                    docs_service = await asyncio.to_thread(
+                        build, 'docs', 'v1', credentials=_get_google_creds()
+                    )
                     
                     text_to_insert = f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}] {fact_text}\n"
                     requests = [{'insertText': {'location': {'index': 1}, 'text': text_to_insert}}]
@@ -248,7 +250,9 @@ class AGYAgent:
                 try:
                     import asyncio
                     from googleapiclient.discovery import build
-                    docs_service = build('docs', 'v1', credentials=_get_google_creds())
+                    docs_service = await asyncio.to_thread(
+                        build, 'docs', 'v1', credentials=_get_google_creds()
+                    )
                     
                     text_to_insert = f"[TODO] {task_text} "
                     if due_date:

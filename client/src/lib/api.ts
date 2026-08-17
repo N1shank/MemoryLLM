@@ -395,5 +395,6 @@ export const integrationsApi = {
   authorizeGoogle: () => request('/api/v1/integrations/google/authorize'),
   callbackNotion: (code: string) => request('/api/v1/integrations/notion/callback?code=' + code, { method: 'POST' }),
   callbackGoogle: (code: string) => request('/api/v1/integrations/google/callback?code=' + code, { method: 'POST' }),
+  disconnectNotion: () => request('/api/v1/integrations/notion', { method: 'DELETE' }),
   disconnectGoogle: () => request('/api/v1/integrations/google', { method: 'DELETE' }),
 };

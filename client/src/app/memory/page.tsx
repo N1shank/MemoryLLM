@@ -80,8 +80,9 @@ export default function MemoryManagerPage() {
       setResults(prev => prev.map(item => {
         if (item.id === id) {
           const newItem = JSON.parse(JSON.stringify(item));
-          if (newItem.properties?.title?.title) {
-            newItem.properties.title.title = [{ text: { content: editTitle }, plain_text: editTitle }];
+          const titleKey = Object.keys(newItem.properties || {}).find(k => newItem.properties[k].type === 'title');
+          if (titleKey && newItem.properties[titleKey].title) {
+            newItem.properties[titleKey].title = [{ text: { content: editTitle }, plain_text: editTitle }];
           }
           return newItem;
         }
