@@ -516,6 +516,38 @@ export default function SettingsPage() {
               <span className="text-green-400 text-sm">Google integration updated successfully!</span>
             </div>
           )}
+
+          {user?.google_api_key_configured && user?.google_files && user.google_files.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-chat-muted mb-3">Memory Documents</h3>
+              <div className="space-y-2">
+                {user.google_files.map((file: any, idx: number) => {
+                  const url = file.role === 'dashboard'
+                    ? `https://drive.google.com/drive/folders/${file.id}`
+                    : `https://docs.google.com/document/d/${file.id}`;
+                  const icon = file.role === 'dashboard' ? '📁' : file.role === 'facts' ? '📚' : file.role === 'skills' ? '🛠️' : '📋';
+                  return (
+                    <a
+                      key={idx}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 rounded-lg border border-chat-border hover:bg-chat-hover transition-colors group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg">{icon}</span>
+                        <div>
+                          <p className="text-sm font-medium">{file.title}</p>
+                          <p className="text-xs text-chat-muted capitalize">{file.role}</p>
+                        </div>
+                      </div>
+                      <ExternalLink size={14} className="text-chat-muted opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Password Section */}
