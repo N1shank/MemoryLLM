@@ -210,18 +210,21 @@ export const conversationsApi = {
 export const chatApi = {
   getMessages: (conversationId: number, limit = 50, offset = 0) => request(`/api/v1/chat/conversations/${conversationId}/messages?limit=${limit}&offset=${offset}`),
   async *sendStream(content: string, conversationId?: number, files: string[] = []) {
-    const token = getAuthToken();
+    let token = getAuthToken();
     const url = new URL(`${API_BASE_URL}/api/v1/chat/stream`);
 
-    const headers = new Headers({ 
-      'Accept': 'text/event-stream',
-      'Content-Type': 'application/json'
-    });
-    if (token) headers.set('Authorization', `Bearer ${token}`);
+    const getHeaders = (t: string) => {
+      const h = new Headers({ 
+        'Accept': 'text/event-stream',
+        'Content-Type': 'application/json'
+      });
+      if (t) h.set('Authorization', `Bearer ${t}`);
+      return h;
+    };
 
-    const response = await fetch(url.toString(), { 
+    let response = await fetch(url.toString(), { 
       method: 'POST',
-      headers,
+      headers: getHeaders(token),
       body: JSON.stringify({ 
         message: content, 
         conversation_id: conversationId,
@@ -229,6 +232,63 @@ export const chatApi = {
       })
     });
     
+    if (response.status === 401 && typeof window !== 'undefined') {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        if (!isRefreshing) {
+          isRefreshing = true;
+          try {
+            const refreshRes = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh_token: refreshToken })
+            });
+            if (refreshRes.ok) {
+              const data = await refreshRes.json();
+              setAuthToken(data.access_token, data.refresh_token);
+              setStoredUser(data.user);
+              onRefreshed(data.access_token);
+              
+              token = data.access_token;
+              response = await fetch(url.toString(), {
+                method: 'POST',
+                headers: getHeaders(token),
+                body: JSON.stringify({ message: content, conversation_id: conversationId, files: files })
+              });
+            } else {
+              clearAuthToken();
+              window.location.href = '/auth/login';
+            }
+          } catch (e) {
+            clearAuthToken();
+            window.location.href = '/auth/login';
+          } finally {
+            isRefreshing = false;
+          }
+        } else {
+          response = await new Promise<Response>((resolve, reject) => {
+            subscribeTokenRefresh(async (newToken) => {
+              try {
+                const retryRes = await fetch(url.toString(), {
+                  method: 'POST',
+                  headers: getHeaders(newToken),
+                  body: JSON.stringify({ message: content, conversation_id: conversationId, files: files })
+                });
+                resolve(retryRes);
+              } catch (e) {
+                reject(e);
+              }
+            });
+          });
+        }
+      } else {
+        clearAuthToken();
+        if (window.location.pathname !== '/auth/login') {
+          window.location.href = '/auth/login';
+        }
+      }
+    }
+
     if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
     }
@@ -331,5 +391,9 @@ export const notionApi = {
 
 // Integrations API
 export const integrationsApi = {
+  authorizeNotion: () => request('/api/v1/integrations/notion/authorize'),
+  authorizeGoogle: () => request('/api/v1/integrations/google/authorize'),
+  callbackNotion: (code: string) => request('/api/v1/integrations/notion/callback?code=' + code, { method: 'POST' }),
+  callbackGoogle: (code: string) => request('/api/v1/integrations/google/callback?code=' + code, { method: 'POST' }),
   disconnectGoogle: () => request('/api/v1/integrations/google', { method: 'DELETE' }),
 };
