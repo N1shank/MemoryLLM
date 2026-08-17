@@ -3,8 +3,7 @@
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { config } from '@/lib/config';
-import { getAuthToken } from '@/lib/api';
+import { integrationsApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 function NotionCallbackContent() {
@@ -38,20 +37,7 @@ function NotionCallbackContent() {
 
     const exchangeCode = async () => {
       try {
-        const token = getAuthToken();
-        const response = await fetch(`${config.apiUrl}/api/v1/integrations/notion/callback?code=${code}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.detail || 'Failed to authenticate with Notion');
-        }
-
-        const data = await response.json();
+        const data = await integrationsApi.callbackNotion(code);
         setWorkspaceName(data.workspace_name || 'Notion');
         setStatus('success');
         

@@ -126,13 +126,7 @@ export default function SettingsPage() {
     setNotionLoading(true);
     setNotionError('');
     try {
-      const response = await fetch(`${config.apiUrl}/api/v1/integrations/notion/authorize`, {
-        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-      });
-      if (!response.ok) {
-        throw new Error('Failed to get Notion authorization URL. Ensure Notion integration is configured in backend.');
-      }
-      const data = await response.json();
+      const data = await integrationsApi.authorizeNotion();
       if (data.url) {
         window.location.href = data.url;
       } else {
@@ -165,13 +159,7 @@ export default function SettingsPage() {
     setGoogleLoading(true);
     setGoogleError('');
     try {
-      const response = await fetch(`${config.apiUrl}/api/v1/integrations/google/authorize`, {
-        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-      });
-      if (!response.ok) {
-        throw new Error('Failed to get Google authorization URL. Ensure Google integration is configured in backend.');
-      }
-      const data = await response.json();
+      const data = await integrationsApi.authorizeGoogle();
       if (data.url) {
         window.location.href = data.url;
       } else {

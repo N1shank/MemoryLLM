@@ -3,8 +3,7 @@
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { config } from '@/lib/config';
-import { getAuthToken } from '@/lib/api';
+import { integrationsApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
 function GoogleCallbackContent() {
@@ -38,20 +37,7 @@ function GoogleCallbackContent() {
 
     const exchangeCode = async () => {
       try {
-        const token = getAuthToken();
-        const response = await fetch(`${config.apiUrl}/api/v1/integrations/google/callback?code=${code}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.detail || 'Failed to authenticate with Google');
-        }
-
-        const data = await response.json();
+        const data = await integrationsApi.callbackGoogle(code);
         setAccountEmail(data.account_email || 'Google Account');
         setStatus('success');
         
